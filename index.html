@@ -39,6 +39,8 @@
   #toast .k { font-size: 11px; letter-spacing: .2em; color: #ffcf5a; }
   #toast .n { font-size: 22px; font-weight: 800; margin: 2px 0; }
   #toast .l { font-size: 13px; opacity: .85; }
+  #stealth { position: absolute; right: 14px; top: 56px; font-size: 12px; font-weight: 800; letter-spacing: .12em; padding: 5px 10px;
+    border-radius: 8px; background: rgba(10,16,28,.62); display: none; }
   .opt { font-size: 13px; display: flex; gap: 7px; align-items: center; cursor: pointer; border: 1px solid rgba(255,255,255,.18);
     border-radius: 8px; padding: 7px 10px; }
   .opt input { accent-color: #ffb52e; width: 15px; height: 15px; }
@@ -92,7 +94,8 @@
   </div>
   <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div></div>
   <div id="miniWrap" class="panel"><canvas id="mini" width="180" height="180"></canvas></div>
-  <div id="help">WASD drive · Space handbrake · Shift boost · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
+  <div id="help">WASD drive · Space handbrake · Shift boost · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
+  <div id="stealth"></div>
   <div id="toast" class="panel"></div>
   <div id="pop"></div>
 </div>
@@ -103,18 +106,21 @@
   <button data-k="down" style="right:96px">▼</button>
   <button data-k="up" style="right:18px">▲</button>
   <button data-k="hop" style="right:57px; bottom:286px">⤒</button>
+  <button id="tHook" style="left:57px; bottom:286px; font-size:12px">HOOK</button>
 </div>
 
 <div id="ovStart" class="ov on"><div class="card panel">
   <h1>VOXEL DRIVER</h1>
   <p>An off-road expedition across a procedurally generated voxel island. Twelve landmarks are out there —
   in the snowfields up north, the desert down south, on the peaks and along the coast. Follow the waypoint arrow,
-  pick your own line over the terrain, and chart the whole island.</p>
+  pick your own line over the terrain, and chart the whole island. Roads link the landmarks and are quicker; side trails
+  break off to quiet dead ends.</p>
   <div class="keys">
     <span>W A S D / arrows</span><span>Drive and steer</span>
     <span>Space</span><span>Handbrake (drift)</span>
     <span>Shift</span><span>Boost — fast enough and you plough through trees and bounce over rocks</span>
     <span>E</span><span>Hop. In the air, A / D spins, and Space with W / S flips. Red mushrooms are trampolines.</span>
+    <span>F / click</span><span>Grappling hook. Hit a thief to reel it in or a hunter to stun it. Miss, and it drags you to wherever it lands.</span>
     <span>T</span><span>Switch to the next waypoint</span>
     <span>J · M</span><span>Journal of landmarks · full island map</span>
     <span>C · R</span><span>Camera distance · recover the truck if you get stuck</span>
@@ -123,7 +129,7 @@
   </div>
   <div class="row" style="margin-top:4px">
     <label class="opt"><input type="checkbox" id="oThieves"> Parcel thieves to chase down</label>
-    <label class="opt"><input type="checkbox" id="oHunters"> Hunter trucks that chase you</label>
+    <label class="opt"><input type="checkbox" id="oHunters"> Hunter trucks that hunt you by sight</label>
   </div>
   <p id="startInfo" style="opacity:.75"></p>
   <div class="row">
@@ -159,7 +165,7 @@
 const $ = id => document.getElementById(id);
 
 // ───────────────────────── save / seed ─────────────────────────
-const SAVE_KEY = 'voxel-driver-v4';
+const SAVE_KEY = 'voxel-driver-v5';
 const NOSAVE = new URLSearchParams(location.search).has('nosave');   // test drives: neither read nor write the save
 let save = null;
 try { if (!NOSAVE) save = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
@@ -211,6 +217,12 @@ const RZ = a => { const o = ident(), c = Math.cos(a), s = Math.sin(a); o[0] = c;
 const RA = (x, y, z, a) => { const c = Math.cos(a), s = Math.sin(a), t = 1 - c, o = ident();
   o[0] = t * x * x + c; o[1] = t * x * y + s * z; o[2] = t * x * z - s * y; o[4] = t * x * y - s * z; o[5] = t * y * y + c; o[6] = t * y * z + s * x;
   o[8] = t * x * z + s * y; o[9] = t * y * z - s * x; o[10] = t * z * z + c; return o; };
+function segMat(a, b, th) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz) || 1e-3, z = [dx / L, dy / L, dz / L];
+  const x = norm3(cross(Math.abs(z[1]) < 0.99 ? [0, 1, 0] : [1, 0, 0], z)), y = cross(z, x), o = ident();
+  o[0] = x[0] * th; o[1] = x[1] * th; o[2] = x[2] * th; o[4] = y[0] * th; o[5] = y[1] * th; o[6] = y[2] * th; o[8] = z[0] * L; o[9] = z[1] * L; o[10] = z[2] * L;
+  o[12] = (a[0] + b[0]) / 2; o[13] = (a[1] + b[1]) / 2; o[14] = (a[2] + b[2]) / 2; return o;
+}
 const mulN = (...m) => m.reduce((a, b) => mul(a, b));
 function persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2), o = new Float32Array(16); o[0] = t / asp; o[5] = t; o[10] = (f + n) / (n - f); o[11] = -1; o[14] = 2 * f * n / (n - f); return o; }
 function lookAt(e, c, u) {
@@ -222,31 +234,43 @@ function lookAt(e, c, u) {
 }
 
 // ───────────────────────── world ─────────────────────────
-const SEA = 12, WATER = SEA - 0.22, R = 620, CH = 16, RD = 9;
+const SEA = 12, WATER = SEA - 0.22, R = 900, CH = 16, RD = 13;
 const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6;
 const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows'];
 const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48]];
 const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4]];
 const DEEPC = [.42, .42, .45];
+const ROADC = TOPC.map((c, i) => mix3(c, i === SNOW ? [.74, .74, .78] : [.58, .52, .43], 0.8));
 const landmarks = [];   // filled by placeLandmarks
 
+// Roads live in a one-block-resolution field holding distance to the nearest road centre line.
+const RF_N = 2304, RF_O = -1152, ROAD_R = 9;
+const roadField = new Uint8Array(RF_N * RF_N), roads = [];
+function roadDist(x, z) {
+  const ix = Math.floor(x - RF_O), iz = Math.floor(z - RF_O);
+  if (ix < 0 || iz < 0 || ix >= RF_N || iz >= RF_N) return ROAD_R;
+  return ROAD_R * (1 - roadField[iz * RF_N + ix] / 255);
+}
+const onRoad = (x, z) => roadDist(x, z) < 3;
 function rawHeight(x, z) {
   const d = Math.hypot(x, z) / R;
-  const coast = d + (fbm(x / 145 + 7.1, z / 145 - 3.3, 11, 3) - 0.5) * 0.38;
+  const coast = d + (fbm(x / 200 + 7.1, z / 200 - 3.3, 11, 3) - 0.5) * 0.38;
   const fall = 1 - smooth(0.6, 1.0, coast);
-  const e = fbm(x / 260, z / 260, 1, 4);
-  const hills = fbm(x / 62, z / 62, 2, 3);
-  const rn = fbm(x / 240 + 40, z / 240 + 40, 3, 2);
+  const e = fbm(x / 340, z / 340, 1, 4);
+  const hills = fbm(x / 80, z / 80, 2, 3);
+  const rn = fbm(x / 310 + 40, z / 310 + 40, 3, 2);
   const ridge = 1 - Math.abs(rn * 2 - 1);
   const mm = 1 - smooth(0.12, 0.62, d);
   const whoops = fbm(x / 27 + 5, z / 27 - 9, 9, 2);
-  let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 + (whoops - 0.5) * 2.6 + ridge * ridge * mm * 42;
+  const rd = roadDist(x, z), wr = rd < 8 ? 1 - smooth(3, 8, rd) : 0;       // roads are graded: the small bumps are levelled out
+  let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 * (1 - 0.65 * wr) + (whoops - 0.5) * 2.6 * (1 - wr) + ridge * ridge * mm * 42;
   // winding valleys: dry canyons through the high ground, shallow fordable rivers through the low
   if (L > -0.9) {
-    const vr = 1 - Math.abs(fbm(x / 230 - 60, z / 230 + 90, 8, 2) * 2 - 1);
+    const vr = 1 - Math.abs(fbm(x / 300 - 60, z / 300 + 90, 8, 2) * 2 - 1);
     L = Math.max(L - vr * vr * vr * 20, -0.9);
   }
-  return SEA + L * fall - 9 * (1 - fall);
+  const h = SEA + L * fall - 9 * (1 - fall);
+  return wr > 0 && h < SEA + 1.4 ? lerp(h, SEA + 1.4, Math.min(1, wr * 1.5)) : h;      // and carried over water on a causeway
 }
 function heightF(x, z) {
   let h = rawHeight(x, z);
@@ -262,7 +286,7 @@ function groundAt(x, z) {
   const a = top(x0, z0), b = top(x0 + 1, z0), c = top(x0, z0 + 1), d = top(x0 + 1, z0 + 1);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
-const temp = (x, z) => z / R * 1.25 + (fbm(x / 320 + 31, z / 320 + 47, 5, 2) - 0.5) * 0.8;
+const temp = (x, z) => z / R * 1.25 + (fbm(x / 450 + 31, z / 450 + 47, 5, 2) - 0.5) * 0.8;
 function biomeAt(x, z, h) {
   const alt = h - SEA;
   if (alt < 0) return SEABED;
@@ -272,7 +296,7 @@ function biomeAt(x, z, h) {
   if (t > 0.42) return DESERT;
   if (alt > 56) return SNOW;
   if (alt > 40) return ROCK;
-  return fbm(x / 185 - 12, z / 185 + 8, 6, 3) > 0.54 ? FOREST : GRASS;
+  return fbm(x / 250 - 12, z / 250 + 8, 6, 3) > 0.56 ? FOREST : GRASS;
 }
 function isCoast(x, z) {
   for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (rawHeight(x + Math.cos(a) * 26, z + Math.sin(a) * 26) < SEA - 1) return true; }
@@ -455,6 +479,99 @@ const LM_DEFS = [
 let spawn = { x: 0, z: 0, h: 0 };
 const crates = [];
 const lmObs = [];
+function chaikin(pts, times) {      // round the corners off a path
+  for (let t = 0; t < times; t++) {
+    const o = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1]; o.push([x0 * .75 + x1 * .25, z0 * .75 + z1 * .25], [x0 * .25 + x1 * .75, z0 * .25 + z1 * .75]); }
+    o.push(pts[pts.length - 1]); pts = o;
+  }
+  return pts;
+}
+function buildRoads(rng) {
+  // route-find on a coarse grid: gentle grades are cheap, water is dear, and ground already paved is cheapest, so roads merge and fork
+  const CS = 20, GW = Math.ceil(RF_N / CS), hC = new Float32Array(GW * GW), used = new Uint8Array(GW * GW), gs = new Float32Array(GW * GW), from = new Int32Array(GW * GW), closed = new Uint8Array(GW * GW);
+  for (let j = 0; j < GW; j++) for (let i = 0; i < GW; i++) hC[j * GW + i] = rawHeight(RF_O + (i + .5) * CS, RF_O + (j + .5) * CS);
+  const cellOf = (x, z) => clamp(Math.floor((z - RF_O) / CS), 0, GW - 1) * GW + clamp(Math.floor((x - RF_O) / CS), 0, GW - 1);
+  function route(ax, az, bx, bz) {
+    const s = cellOf(ax, az), t = cellOf(bx, bz), ti = t % GW, tj = (t / GW) | 0, hf = [], hc = [];
+    const push = (f, c) => { let i = hf.length; hf.push(f); hc.push(c); while (i > 0) { const p = (i - 1) >> 1; if (hf[p] <= f) break; hf[i] = hf[p]; hc[i] = hc[p]; i = p; } hf[i] = f; hc[i] = c; };
+    const pop = () => { const c = hc[0], lf = hf.pop(), lc = hc.pop(), n = hf.length; if (n) { let i = 0; for (;;) { let k = 2 * i + 1; if (k >= n) break; if (k + 1 < n && hf[k + 1] < hf[k]) k++; if (hf[k] >= lf) break; hf[i] = hf[k]; hc[i] = hc[k]; i = k; } hf[i] = lf; hc[i] = lc; } return c; };
+    gs.fill(Infinity); closed.fill(0); gs[s] = 0; from[s] = -1; push(0, s);
+    while (hf.length) {
+      const c = pop();
+      if (c === t) break;
+      if (closed[c]) continue;
+      closed[c] = 1;
+      const ci = c % GW, cj = (c / GW) | 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ni = ci + di, nj = cj + dj;
+        if ((!di && !dj) || ni < 0 || nj < 0 || ni >= GW || nj >= GW) continue;
+        const n = nj * GW + ni, dist = CS * Math.hypot(di, dj);
+        let cost = dist * (1 + Math.abs(hC[n] - hC[c]) / dist * 12);
+        if (hC[n] < SEA) cost *= 7;
+        if (used[n]) cost *= 0.4;
+        if (gs[c] + cost < gs[n]) { gs[n] = gs[c] + cost; from[n] = c; push(gs[n] + CS * Math.hypot(ni - ti, nj - tj) * 0.4, n); }
+      }
+    }
+    if (gs[t] === Infinity) return null;
+    const cells = [];
+    for (let c = t; c !== -1; c = from[c]) cells.push(c);
+    cells.reverse();
+    const pts = [[ax, az]];
+    for (const c of cells.slice(1, -1)) { used[c] = 1; pts.push([RF_O + (c % GW + .5) * CS, RF_O + ((c / GW | 0) + .5) * CS]); }
+    pts.push([bx, bz]);
+    return pts;
+  }
+  function stamp(pts, off) {       // write the path into the distance field; off narrows it (side trails)
+    for (let k = 0; k < pts.length - 1; k++) {
+      const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0)));
+      for (let q = 0; q < n; q++) {
+        const px = x0 + (x1 - x0) * q / n, pz = z0 + (z1 - z0) * q / n, ix0 = Math.floor(px - RF_O), iz0 = Math.floor(pz - RF_O);
+        for (let dz = -ROAD_R; dz <= ROAD_R; dz++) {
+          const iz = iz0 + dz; if (iz < 0 || iz >= RF_N) continue;
+          for (let dx = -ROAD_R; dx <= ROAD_R; dx++) {
+            const ix = ix0 + dx; if (ix < 0 || ix >= RF_N) continue;
+            const d = Math.hypot(ix + .5 + RF_O - px, iz + .5 + RF_O - pz) + off;
+            if (d >= ROAD_R) continue;
+            const v = (255 * (1 - d / ROAD_R)) | 0, i = iz * RF_N + ix;
+            if (v > roadField[i]) roadField[i] = v;
+          }
+        }
+      }
+    }
+  }
+  // main roads: a tree joining the start and every landmark, plus a few extra links so there is more than one way round
+  const nodes = [{ x: spawn.x, z: spawn.z, pad: 0 }, ...landmarks.map(l => ({ x: l.x, z: l.z, pad: l.pad }))];
+  const D = (a, b) => Math.hypot(nodes[a].x - nodes[b].x, nodes[a].z - nodes[b].z), inT = [0], edges = [];
+  while (inT.length < nodes.length) {
+    let best = null, bd = 1e9;
+    for (const a of inT) for (let b = 0; b < nodes.length; b++) if (!inT.includes(b) && D(a, b) < bd) { bd = D(a, b); best = [a, b]; }
+    edges.push(best); inT.push(best[1]);
+  }
+  for (let a = 1, extra = 0; a < nodes.length && extra < 4; a++) {
+    const near = nodes.map((_, b) => b).filter(b => b !== a && !edges.some(e => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a))).sort((p, q) => D(a, p) - D(a, q))[0];
+    if (near !== undefined && D(a, near) < 640) { edges.push([a, near]); extra++; }
+  }
+  for (const [a, b] of edges) {
+    let pts = route(nodes[a].x, nodes[a].z, nodes[b].x, nodes[b].z);
+    if (!pts) continue;
+    pts = chaikin(pts, 2).filter(([x, z]) => [nodes[a], nodes[b]].every(n => !n.pad || Math.hypot(x - n.x, z - n.z) > n.pad + 1));      // stop at the edge of each landmark's yard
+    if (pts.length < 2) continue;
+    roads.push({ pts, main: true }); stamp(pts, 0);
+  }
+  // side trails: narrow tracks that leave a road and dead-end somewhere quiet
+  const ends = [], mains = roads.slice();
+  for (let k = 0, tries = 0; k < 14 && tries < 600 && mains.length; tries++) {
+    const r = mains[Math.floor(rng() * mains.length)], p = r.pts[Math.floor(rng() * r.pts.length)];
+    const a = rng() * 6.2832, rr = 140 + rng() * 190, x = p[0] + Math.cos(a) * rr, z = p[1] + Math.sin(a) * rr;
+    if (Math.hypot(x, z) > R * 0.88 || rawHeight(x, z) < SEA + 1.5 || roadDist(x, z) < ROAD_R) continue;
+    if (landmarks.some(l => Math.hypot(l.x - x, l.z - z) < l.pad + 40) || ends.some(e => Math.hypot(e[0] - x, e[1] - z) < 110)) continue;
+    const pts = route(p[0], p[1], x, z);
+    if (!pts) continue;
+    const sm = chaikin(pts, 2); roads.push({ pts: sm, main: false }); stamp(sm, 1.4); ends.push([x, z]); k++;
+  }
+  return ends;
+}
 function placeWorld() {
   const rng = mulberry32(SEED * 7 + 3);
   // spawn: flat grass, away from the peaks
@@ -474,8 +591,8 @@ function placeWorld() {
         const a = rng() * 6.2832, rr = Math.sqrt(rng()) * R * 0.9, x = Math.round(Math.cos(a) * rr), z = Math.round(Math.sin(a) * rr);
         const hr = rawHeight(x + .5, z + .5), h = Math.floor(hr), alt = h - SEA;
         if (alt < 1) continue;
-        if (Math.hypot(x - spawn.x, z - spawn.z) < 95) continue;
-        const minD = pass === 0 ? 185 : 110;
+        if (Math.hypot(x - spawn.x, z - spawn.z) < 130) continue;
+        const minD = pass === 0 ? 270 : 160;
         if (placed.some(p => Math.hypot(p.x - x, p.z - z) < minD)) continue;
         if (pass === 0) {
           if (!def.want(biomeAt(x, z, h), alt, x, z)) continue;
@@ -491,14 +608,15 @@ function placeWorld() {
   }
   for (const p of placed) landmarks.push(p);
   for (const lm of landmarks) lm.where = sectorName(lm.x, lm.z);
-  // lost parcels
+  // roads first, since they reshape the ground a little; then lost parcels, starting with one at the end of every side trail
+  for (const [x, z] of buildRoads(rng)) crates.push({ x: Math.floor(x) + .5, z: Math.floor(z) + .5, y: top(Math.floor(x), Math.floor(z)), got: false });
   const rc = mulberry32(SEED * 13 + 5);
   for (let i = 0; i < 20000 && crates.length < 30; i++) {
     const a = rc() * 6.2832, rr = Math.sqrt(rc()) * R * 0.92, x = Math.round(Math.cos(a) * rr), z = Math.round(Math.sin(a) * rr);
     const h = top(x, z);
     if (h - SEA < 1) continue;
     if (landmarks.some(l => Math.hypot(l.x - x, l.z - z) < l.pad + 12)) continue;
-    if (crates.some(c => Math.hypot(c.x - x, c.z - z) < 85)) continue;
+    if (crates.some(c => Math.hypot(c.x - x, c.z - z) < 125)) continue;
     if (Math.hypot(x - spawn.x, z - spawn.z) < 25) continue;
     crates.push({ x: x + .5, z: z + .5, y: h, got: false });
   }
@@ -663,7 +781,7 @@ function buildChunk(cx, cz) {
   for (let z = 0; z < CH; z++) for (let x = 0; x < CH; x++) {
     const wx = ox + x, wz = oz + z, h = g(x, z), b = biomeAt(wx, wz, h), rnd = hash2(wx, wz, 101);
     mb.flag = 0;
-    const tc = TOPC[b], k = 0.92 + rnd * 0.16;
+    const rdv = roadDist(wx + .5, wz + .5), tc = rdv < 3 && h >= SEA ? ROADC[b] : TOPC[b], k = rdv < 3 ? 0.95 + rnd * 0.1 : 0.92 + rnd * 0.16;
     const n = g(x, z - 1) > h, s = g(x, z + 1) > h, w = g(x - 1, z) > h, e = g(x + 1, z) > h;
     const a00 = ao(w, n, g(x - 1, z - 1) > h), a01 = ao(w, s, g(x - 1, z + 1) > h), a11 = ao(e, s, g(x + 1, z + 1) > h), a10 = ao(e, n, g(x + 1, z - 1) > h);
     mb.quad(wx, h, wz, wx, h, wz + 1, wx + 1, h, wz + 1, wx + 1, h, wz, tc[0] * k, tc[1] * k, tc[2] * k, 2, a00, a01, a11, a10, a00 + a11 > a01 + a10);
@@ -690,7 +808,7 @@ function buildChunk(cx, cz) {
       continue;
     }
     // decorations
-    let skip = Math.hypot(wx - spawn.x, wz - spawn.z) < 6;
+    let skip = Math.hypot(wx - spawn.x, wz - spawn.z) < 6 || rdv < 4.6;
     for (const l of near) if (Math.hypot(wx + .5 - l.x, wz + .5 - l.z) < l.pad + 2.5) skip = true;
     if (skip) continue;
     const r2 = hash2(wx, wz, 202), r3 = hash2(wx, wz, 303), gone = felled.has(wx + ',' + wz);
@@ -708,12 +826,12 @@ function buildChunk(cx, cz) {
       else if (r2 < 0.043) { mb.box(wx + .42, h, wz + .42, wx + .58, h + .3, wz + .58, C.cream); mb.box(wx + .25, h + .3, wz + .25, wx + .75, h + .5, wz + .75, [.8, .2, .2]); }
       else if (r2 < 0.046) put('shroom', r3);
     } else if (b === GRASS) {
-      if (r2 < 0.006) put('oak', r3);
+      if (r2 < 0.004) put('oak', r3);
       else if (r2 < 0.012) put('bush', r3, jit(C.leaf2, .3, r3));
       else if (r2 < 0.045) { mb.box(wx + .45, h, wz + .45, wx + .55, h + .35, wz + .55, C.leaf); mb.box(wx + .34, h + .35, wz + .34, wx + .66, h + .62, wz + .66, FLOWERS[Math.floor(r3 * 4.99)]); }
       else if (r2 < 0.049) put(rockKind, r3, false);
       else if (r2 < 0.12) mb.box(wx + .3 + r3 * .3, h, wz + .4, wx + .42 + r3 * .3, h + .28 + r3 * .2, wz + .52, jit([.3, .56, .22], .3, r3));
-      else if (r2 < 0.1228) put('shroom', r3);
+      else if (r2 < 0.1212) put('shroom', r3);
     } else if (b === DESERT) {
       if (r2 < 0.005) put('cactus', r3);
       else if (r2 < 0.012) put(rockKind, r3, false);
@@ -741,7 +859,7 @@ function planChunks(ccx, ccz) {
     if (!chunks.has(ckey(ccx + dx, ccz + dz))) queue.push([dx * dx + dz * dz, ccx + dx, ccz + dz]);
   }
   queue.sort((a, b) => b[0] - a[0]);
-  for (const [k, c] of chunks) if (Math.abs(c.cx - ccx) > RD + 2 || Math.abs(c.cz - ccz) > RD + 2) { freeMesh(c.mesh); freeMesh(c.water); chunks.delete(k); }
+  for (const [k, c] of chunks) if ((c.cx - ccx) ** 2 + (c.cz - ccz) ** 2 > (RD + 2.5) ** 2) { freeMesh(c.mesh); freeMesh(c.water); chunks.delete(k); }
 }
 function pumpChunks(ms) {
   const t0 = performance.now();
@@ -757,7 +875,7 @@ for (const lm of landmarks) {
   const m = new MB(), g = new MB(), x = new MB(), o = [];
   lm.def.build(m, g, x, o);
   lm.mesh = makeMesh(m); lm.glow = makeMesh(g); lm.extra = makeMesh(x);
-  for (const [dx, dz, r] of o) lmObs.push({ x: lm.x + dx, z: lm.z + dz, r, kind: 'solid' });
+  for (const [dx, dz, r] of o) lmObs.push({ x: lm.x + dx, z: lm.z + dz, r, kind: 'solid', y: lm.y });
 }
 const carMesh = (() => {
   const m = new MB(), g = new MB(), w = new MB(); m.lo = g.lo = 0.92; w.lo = 0.8;
@@ -796,18 +914,18 @@ const CLOUD_P = 640;
 const cloudMesh = (() => {
   const m = new MB(), r = mulberry32(SEED + 99); m.lo = 0.88;
   for (let i = 0; i < 46; i++) {
-    const x = r() * CLOUD_P, z = (r() - .5) * 1900, y = 135 + r() * 30, n = 2 + Math.floor(r() * 4);
+    const x = r() * CLOUD_P, z = (r() - .5) * 2700, y = 140 + r() * 30, n = 2 + Math.floor(r() * 4);
     for (let k = 0; k < n; k++) m.cbox(x + (r() - .5) * 22, y + (r() - .5) * 3, z + (r() - .5) * 16, 12 + r() * 18, 3 + r() * 3, 10 + r() * 12, [1, 1, 1]);
   }
   return makeMesh(m);
 })();
 
 // ───────────────────────── minimap data ─────────────────────────
-const MAPN = 256, MAPS = 6, MAPO = -768;
+const MAPN = 256, MAPS = 9, MAPO = -1152;
 const mapCv = document.createElement('canvas'); mapCv.width = mapCv.height = MAPN;
 const fogCv = document.createElement('canvas'); fogCv.width = fogCv.height = MAPN;
 const fctx = fogCv.getContext('2d', { willReadFrequently: true });
-const GN = 64, GC = 24, REVEAL = 62;
+const GN = 64, GC = 36, REVEAL = 85;
 const landGrid = new Uint8Array(GN * GN), expl = new Uint8Array(GN * GN);
 let landTotal = 0, explLand = 0;
 (function buildMap() {
@@ -825,6 +943,12 @@ let landTotal = 0, explLand = 0;
     d[i * 4] = clamp(c[0], 0, 1) * 255; d[i * 4 + 1] = clamp(c[1], 0, 1) * 255; d[i * 4 + 2] = clamp(c[2], 0, 1) * 255; d[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
+  ctx.lineCap = ctx.lineJoin = 'round';
+  for (const r of roads) {
+    ctx.strokeStyle = r.main ? 'rgba(244,232,200,.95)' : 'rgba(228,208,168,.8)'; ctx.lineWidth = r.main ? 1.5 : 0.9; ctx.beginPath();
+    r.pts.forEach(([x, z], i) => { const px = (x - MAPO) / MAPS, py = (z - MAPO) / MAPS; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+    ctx.stroke();
+  }
   for (let gz = 0; gz < GN; gz++) for (let gx = 0; gx < GN; gx++) {
     const px = (gx * GC + GC / 2) / MAPS | 0, py = (gz * GC + GC / 2) / MAPS | 0;
     if (hs[py * MAPN + px] >= SEA) { landGrid[gz * GN + gx] = 1; landTotal++; }
@@ -854,6 +978,7 @@ function reveal(x, z) {
 
 // ───────────────────────── game state ─────────────────────────
 const MAXV = 27, BOOSTV = 38, ACC = 20, GRAV = 26, SLOPE = 10.5;
+const TOPV = ACC * 1.3 / (ACC * 1.3 / BOOSTV + 0.12);     // what the truck actually tops out at on the flat with boost held (about 32)
 const car = { x: spawn.x, z: spawn.z, y: 0, vy: 0, h: spawn.h, vx: 0, vz: 0, pitch: 0, roll: 0, steer: 0, spin: 0, g: 0, hs: 0, air: 0, biome: GRASS, vF: 0,
   pop: 0, sy: 0, sv: 0, pv: 0, rv: 0, gp: 0, gr: 0, flip: 0, yawAcc: 0, mb: 0 };
 let lastSafe = { x: spawn.x, z: spawn.z, h: spawn.h }, safeT = 0;
@@ -927,7 +1052,7 @@ function sfxBoing() {
 }
 
 // ───────────────────────── HUD ─────────────────────────
-const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc') };
+const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc'), stealth: $('stealth') };
 function popText(t) { el.pop.textContent = t; el.pop.classList.remove('show'); void el.pop.offsetWidth; el.pop.classList.add('show'); }
 let toastT = 0;
 function toast(kicker, name, line, secs = 5) {
@@ -966,8 +1091,16 @@ function updateHud() {
   const nf = landmarks.filter(l => l.found).length;
   el.found.textContent = nf; el.crates.textContent = crates.filter(c => c.got).length;
   el.expl.textContent = Math.round(explLand / Math.max(1, landTotal) * 100); el.km.textContent = (odo / 1000).toFixed(1); el.smash.textContent = smashed;
+  let st = '', sc = '';
+  if (opts.hunters && !race) {
+    const hs = npcs.filter(n => n.type === 'hunter' && n.alive);
+    if (hs.some(n => n.mode === 'chase')) { st = hs.some(n => n.mode === 'chase' && n.tired) ? 'SPOTTED · HUNTER TIRING' : 'SPOTTED'; sc = '#ff5a4a'; }
+    else if (hs.some(n => n.mode === 'search')) { st = 'THEY ARE SEARCHING'; sc = '#ffb52e'; }
+    else if (hs.some(n => Math.hypot(n.x - car.x, n.z - car.z) < 330)) { st = inCover() ? 'HIDDEN · IN COVER' : 'UNSEEN'; sc = '#3ee08f'; }
+  }
+  el.stealth.style.display = st ? 'block' : 'none'; el.stealth.textContent = st; el.stealth.style.color = sc;
   el.npc.innerHTML = (opts.thieves ? `<b>${caught}</b> thieves caught<br>` : '') + (opts.hunters ? `<b>${wrecked}</b> hunters wrecked · <b>${shaken}</b> lost · <b>${rammed}</b> hits taken` : '');
-  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = BIOME_NAME[car.biome];
+  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.road ? 'Road' : BIOME_NAME[car.biome];
   if (race) {
     const cp = race.cp, dx = cp.x - car.x, dz = cp.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
     el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
@@ -988,7 +1121,7 @@ function drawMarkers(ctx, toPx, big) {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, p, 0, 7); ctx.stroke();
     ctx.strokeStyle = '#27e08a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, p, 0, 7); ctx.stroke();
   }
-  for (const n of npcs) if (n.alive) {
+  for (const n of npcs) if (n.alive && (n.type !== 'hunter' || Math.hypot(n.x - car.x, n.z - car.z) < 330)) {
     const [px, py] = toPx(n.x, n.z);
     ctx.fillStyle = n.type === 'thief' ? '#ffd838' : n.type === 'rival' ? '#ff5ad9' : '#ff3b2e'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(px, py, 3.5, 0, 7); ctx.fill(); ctx.stroke();
@@ -1008,7 +1141,7 @@ function drawMarkers(ctx, toPx, big) {
   ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 6); ctx.lineTo(0, 3); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
 }
 function drawMini() {
-  const w = mini.width, span = 132, src = span * 2 / MAPS, sx = (car.x - MAPO) / MAPS - src / 2, sy = (car.z - MAPO) / MAPS - src / 2;
+  const w = mini.width, span = 180, src = span * 2 / MAPS, sx = (car.x - MAPO) / MAPS - src / 2, sy = (car.z - MAPO) / MAPS - src / 2;
   mctx.imageSmoothingEnabled = false; mctx.fillStyle = '#0b1322'; mctx.fillRect(0, 0, w, w);
   mctx.drawImage(mapCv, sx, sy, src, src, 0, 0, w, w); mctx.drawImage(fogCv, sx, sy, src, src, 0, 0, w, w);
   drawMarkers(mctx, (x, z) => [(x - car.x) / span * w / 2 + w / 2, (z - car.z) / span * w / 2 + w / 2], false);
@@ -1038,6 +1171,7 @@ function recover() {
     const a = k * Math.PI / 6 + rr, x = lastSafe.x + Math.cos(a) * rr, z = lastSafe.z + Math.sin(a) * rr;
     if (clearAt(x, z, 3.6)) { bx = x; bz = z; break search; }
   }
+  if (hook) { if (hook.npc) hook.npc.hooked = false; hook = null; }
   car.x = bx; car.z = bz; car.h = lastSafe.h; car.vx = car.vz = 0; stuckT = 0; settle();
 }
 let stuckT = 0;
@@ -1052,6 +1186,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyC') camMode = (camMode + 1) % CAMS.length;
   else if (e.code === 'KeyR') { recover(); toast('RECOVERED', 'Back on solid ground', '', 2); }
   else if (e.code === 'KeyT') cycleTarget();
+  else if (e.code === 'KeyF') fireHook();
   else if (e.code === 'KeyH') { tone(392, 0, 0.35, 'square', 0.07); tone(494, 0, 0.35, 'square', 0.07); }
   else if (e.code === 'Digit1') { setOpt('thieves', !opts.thieves); toast('PARCEL THIEVES', opts.thieves ? 'On the loose' : 'Off', opts.thieves ? 'Yellow buggies. Run them down to get the parcel back.' : '', 2.5); }
   else if (e.code === 'Digit2') { setOpt('hunters', !opts.hunters); toast('HUNTER TRUCKS', opts.hunters ? 'Coming for you' : 'Off', opts.hunters ? 'Outrun them, or hit them harder than they hit you.' : '', 2.5); }
@@ -1154,15 +1289,17 @@ function updateCar(dt) {
     fx = Math.sin(car.h); fz = Math.cos(car.h);
     const rx = -fz, rz = fx;
     vF = car.vx * fx + car.vz * fz; vL = car.vx * rx + car.vz * rz;
-    let vmax = keys.boost ? BOOSTV : MAXV;
+    let vmax = (keys.boost ? BOOSTV : MAXV) * (car.road ? 1.12 : 1);
     if (b === DESERT || b === BEACH) vmax *= 0.92;
     if (inWater) vmax = 10;
     if (thr > 0) vF += ACC * (keys.boost ? 1.3 : 1) * (vF < 9 ? 1.35 : 1) * Math.max(0, 1 - vF / vmax) * dt;
     else if (thr < 0) { if (vF > 0.5) vF -= 38 * dt; else vF -= 13 * Math.max(0, 1 + vF / 10) * dt; }
     else vF -= vF * 0.7 * dt;
-    vF -= vF * 0.12 * dt;
+    vF -= vF * (car.road ? 0.085 : 0.12) * dt;
     if (inWater) vF -= vF * 2.0 * dt;
     let grip = b === SNOW ? 4 : 9;
+    if (car.road) grip = 11;
+    if (hook && hook.phase === 'pull') grip = 1.5;
     if (keys.brake) { vF -= Math.sign(vF) * Math.min(Math.abs(vF), 22 * dt); grip = 2; }
     vL *= Math.exp(-grip * dt);
     car.vx = fx * vF + rx * vL; car.vz = fz * vF + rz * vL;
@@ -1228,7 +1365,7 @@ function updateCar(dt) {
   car.sv += (-car.sy * 150 - car.sv * 7.5) * dt;
   car.sy = clamp(car.sy + car.sv * dt - (grounded ? clamp(g - pg - dhs, -0.25, 0.25) * 0.6 : 0), -0.32, 0.5);
   // bookkeeping
-  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); }
+  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); car.road = t >= SEA && onRoad(car.x, car.z); }
   safeT -= dt;
   if (safeT <= 0 && car.air < 0.3 && g >= SEA && Math.abs(car.vF) > 4) { safeT = 0.8; lastSafe = { x: car.x, z: car.z, h: car.h }; }
   if (WATER - car.y > 1.5) { recover(); toast('TOO DEEP', 'Winched back to shore', 'The truck wades through shallows, not lakes.', 3); sfxThump(); }
@@ -1239,7 +1376,7 @@ function updateCar(dt) {
   if (dustT <= 0 && car.air < 0.3 && (sp > 7 || Math.abs(vL) > 2.5)) {
     dustT = sp > 20 || Math.abs(vL) > 2.5 ? 0.035 : 0.07;
     const s = Math.random() < .5 ? 1 : -1, wx = car.x + s * 1.05 * fz - 1.6 * fx, wz = car.z - s * 1.05 * fx - 1.6 * fz;
-    if (inWater) puff(wx, WATER + .1, wz, DUST[6], 0.45, 3.5); else puff(wx, car.y + .2, wz, DUST[b], 0.3 + Math.random() * .3, 0.8);
+    if (inWater) puff(wx, WATER + .1, wz, DUST[6], 0.45, 3.5); else puff(wx, car.y + .2, wz, car.road ? [.62, .56, .47] : DUST[b], 0.3 + Math.random() * .3, 0.8);
   }
   if (keys.boost && thr > 0 && ctrl && Math.random() < dt * 45) puff(car.x - fx * 2.5, car.y + 0.95, car.z - fz * 2.5, [1, .5 + Math.random() * .35, .12], 0.32, 0.4, 1);
   // discoveries
@@ -1292,26 +1429,41 @@ function landSpot(cx, cz, rmin, rmax, face) {
 }
 function spawnNpc(n) {
   const thief = n.type === 'thief';
-  const s = landSpot(car.x, car.z, thief ? 70 : 85, thief ? 150 : 120, thief ? null : car.h + Math.PI) || landSpot(car.x, car.z, 45, 200, null);
+  const s = landSpot(car.x, car.z, thief ? 90 : 190, thief ? 200 : 330, null) || landSpot(car.x, car.z, 60, 340, null);
   if (!s) { n.wait = 3; return; }
   initNpc(n, s[0], s[1], Math.random() * 6.2832);
 }
 function initNpc(n, x, z, h) {
   n.x = x; n.z = z; n.y = groundAt(x, z); n.hs = heightF(x, z); n.h = n.wander = h;
   n.v = n.vx = n.vz = n.vy = n.pitch = n.roll = n.spin = n.stun = n.slowT = n.jink = n.jinkT = n.bumpT = 0;
-  n.alive = true; n.hot = false;
+  n.alive = true; n.hooked = false; n.hookSlow = 0;
+  n.mode = 'patrol'; n.sees = false; n.seeT = Math.random() * 0.15; n.lostT = n.chaseT = n.searchT = n.patrolT = 0; n.tired = false; n.px = n.lx = x; n.pz = n.lz = z;
+}
+const inCover = () => car.biome === FOREST && Math.hypot(car.vx, car.vz) < 9;     // sitting still or creeping among the trees
+let dayLight = 1;
+function canSee(n, d) {     // can this hunter see the truck: near enough, not in cover, and no hill in the way
+  if (d < 16) return true;
+  if (d > 215 * (0.6 + 0.4 * dayLight)) return false;
+  if (d > 38 && inCover()) return false;
+  const ey = n.y + 2.6, cy = car.y + 1.8;
+  for (let k = 1; k < 10; k++) { const t = k / 10; if (groundAt(lerp(n.x, car.x, t), lerp(n.z, car.z, t)) > lerp(ey, cy, t) + 0.4) return false; }
+  return true;
+}
+function catchThief(n, nx, nz) {
+  caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
+  tumble(n, nx, nz); n.alive = false; n.hooked = false; n.wait = 5;
 }
 function syncNpcs() {   // make the roster match the options
   if (race) return;
-  for (const [type, on, count] of [['thief', opts.thieves, 3], ['hunter', opts.hunters, 2]]) {
+  for (const [type, on, count] of [['thief', opts.thieves, 4], ['hunter', opts.hunters, 3]]) {
     const have = npcs.filter(n => n.type === type);
     if (!on) { for (const n of have) npcs.splice(npcs.indexOf(n), 1); continue; }
-    for (let i = have.length; i < count; i++) npcs.push({ type, alive: false, wait: type === 'hunter' ? 7 + i * 9 : 0.5 + i * 1.5 });
+    for (let i = have.length; i < count; i++) npcs.push({ type, alive: false, wait: type === 'hunter' ? 4 + i * 6 : 0.5 + i * 1.5 });
   }
 }
 function setOpt(k, v) {
   opts[k] = v;
-  try { localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) {}
+  try { if (!NOSAVE) localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) {}
   $('oThieves').checked = opts.thieves; $('oHunters').checked = opts.hunters;
   syncNpcs(); updateHud();
 }
@@ -1329,24 +1481,54 @@ function updateNpcs(dt) {
   for (const n of npcs) {
     if (!n.alive) { n.wait -= dt; if (n.wait <= 0) spawnNpc(n); continue; }
     const thief = n.type === 'thief', rival = n.type === 'rival', dx = car.x - n.x, dz = car.z - n.z, d = Math.hypot(dx, dz) || 1;
+    if (n.hooked) {     // on the end of the grapple: dragged in, spinning, until it reaches the bumper
+      const k = Math.min(1, 42 * dt / d); n.x += dx * k; n.z += dz * k; n.vx = dx / d * 42; n.vz = dz / d * 42; n.v = 0;
+      n.y += (groundAt(n.x, n.z) + 0.9 - n.y) * Math.min(1, dt * 10); n.h += dt * 9; n.roll = 0.5;
+      if (d < 4.2) { catchThief(n, -dx / d, -dz / d); if (hook) { hook.npc = null; hook.phase = 'back'; } }
+      continue;
+    }
     let want = n.h, vt = 0;
     if (rival) {       // heads for the waypoint, quicker when behind and easing off when ahead
       const cp = race.cp, tx = cp.x - n.x, tz = cp.z - n.z; n.bumpT -= dt;
-      if (race.hold <= 0) { want = Math.atan2(tx, tz); vt = clamp(26 + (Math.hypot(tx, tz) - Math.hypot(cp.x - car.x, cp.z - car.z)) * 0.12, 21, 34); }
+      if (n.hookSlow > 0) n.hookSlow -= dt;
+      else if (race.hold <= 0) { want = Math.atan2(tx, tz); vt = clamp(26 + (Math.hypot(tx, tz) - Math.hypot(cp.x - car.x, cp.z - car.z)) * 0.12, 21, 34); }
     } else if (thief) {
-      if (d > 270) { n.alive = false; n.wait = 1; continue; }
+      if (d > 360) { n.alive = false; n.wait = 1; continue; }
       if (d < 58) {      // run for it, jinking harder the closer you get
         n.jinkT -= dt;
         if (n.jinkT <= 0) { n.jinkT = 0.7 + Math.random() * 1.1; n.jink = (Math.random() - .5) * (d < 32 ? 1.2 : 0.5); }
         want = Math.atan2(-dx, -dz) + (d < 15 ? 0 : n.jink); vt = d < 15 ? 18.5 : 20.5;     // panics in a straight line once you are on its bumper
       } else { n.wander += (Math.random() - .5) * dt * 2; want = n.wander; vt = 7; }
       if (Math.hypot(n.x, n.z) > R * 0.78) want += angDiff(Math.atan2(-n.x, -n.z), want) * 0.6;
-    } else {
-      if (d > 250) { n.alive = false; n.wait = 2; continue; }
-      if (d < 45 && !n.hot) { n.hot = true; popText('HUNTER ON YOUR TAIL'); tone(620, 0, 0.18, 'square', 0.05); tone(820, 0.18, 0.18, 'square', 0.05); }
-      if (n.hot && d > 135) { shaken++; popText('HUNTER SHAKEN OFF'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); n.alive = false; n.wait = 12; continue; }
+    } else {      // hunter: patrols until it sees you, chases while it can, then searches where it last saw you
+      if (d > 560) { n.alive = false; n.wait = 2; continue; }
+      n.seeT -= dt;
+      if (n.seeT <= 0) { n.seeT = 0.15; n.sees = canSee(n, d); }
       if (n.stun > 0) n.stun -= dt;
-      else { const lead = Math.min(1, d / 40); want = Math.atan2(dx + car.vx * lead, dz + car.vz * lead); vt = d > 90 ? 33 : 27.5; }
+      if (n.sees) {
+        if (n.mode !== 'chase') { n.mode = 'chase'; popText('SPOTTED!'); tone(620, 0, 0.18, 'square', 0.05); tone(820, 0.18, 0.18, 'square', 0.05); }
+        n.lx = car.x; n.lz = car.z; n.lostT = 0;
+      } else if (n.mode === 'chase') { n.lostT += dt; if (n.lostT > 3.5) { n.mode = 'search'; n.searchT = 9; } }
+      if (n.mode === 'chase') {
+        n.chaseT += dt;       // matches your top speed exactly, until it has chased long enough to tire
+        if (!n.tired && n.chaseT > 18) { n.tired = true; popText('HUNTER IS TIRING'); }
+        if (n.stun <= 0) {
+          if (n.sees) { const lead = Math.min(1, d / 40); want = Math.atan2(dx + car.vx * lead, dz + car.vz * lead); } else want = Math.atan2(n.lx - n.x, n.lz - n.z);
+          vt = TOPV * (n.tired ? 0.95 : 1);
+        }
+      } else {
+        n.chaseT = Math.max(0, n.chaseT - dt * 0.6); if (n.tired && n.chaseT < 6) n.tired = false;      // gets its wind back
+        if (n.mode === 'search') {
+          n.searchT -= dt;
+          if (Math.hypot(n.lx - n.x, n.lz - n.z) > 12) want = Math.atan2(n.lx - n.x, n.lz - n.z); else { n.wander += dt * 1.2; want = n.wander; }
+          vt = n.stun > 0 ? 0 : 17;
+          if (n.searchT <= 0) { n.mode = 'patrol'; n.patrolT = 0; shaken++; popText('HUNTER LOST YOU'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); }
+        } else {
+          n.patrolT -= dt;
+          if (n.patrolT <= 0 || Math.hypot(n.px - n.x, n.pz - n.z) < 15) { n.patrolT = 14 + Math.random() * 10; const s = landSpot(car.x, car.z, 40, 240, null); if (s) { n.px = s[0]; n.pz = s[1]; } }
+          want = Math.atan2(n.px - n.x, n.pz - n.z); vt = n.stun > 0 ? 0 : 11;
+        }
+      }
     }
     // steer round deep water rather than into it
     const probe = (a, r) => groundAt(n.x + Math.sin(n.h + a) * r, n.z + Math.cos(n.h + a) * r);
@@ -1355,7 +1537,8 @@ function updateNpcs(dt) {
     const turn = thief ? (d < 15 ? 1.1 : 1.8) : 2.4;
     n.h += clamp(angDiff(want, n.h), -turn * dt, turn * dt);
     const fx = Math.sin(n.h), fz = Math.cos(n.h);
-    vt *= 1 - clamp((heightF(n.x + fx, n.z + fz) - heightF(n.x, n.z)) * 0.45, -0.15, 0.5);
+    vt *= 1 - clamp((heightF(n.x + fx, n.z + fz) - heightF(n.x, n.z)) * 0.4, -0.12, 0.5);     // hills slow them about as much as they slow you
+    if (onRoad(n.x, n.z)) vt *= 1.1;         // a road is as much quicker for them as it is for you
     if (n.y < WATER - 0.1) vt = Math.min(vt, thief ? 6 : 11);
     n.v += (vt - n.v) * Math.min(1, dt * 1.6);
     n.vx = fx * n.v; n.vz = fz * n.v; n.x += n.vx * dt; n.z += n.vz * dt;
@@ -1392,15 +1575,13 @@ function updateNpcs(dt) {
       const nx = -dx / d, nz = -dz / d;      // from the player towards the npc
       if (rival) {       // rubbing is racing
         if (n.bumpT <= 0) { n.bumpT = 0.6; car.vx -= nx * 5; car.vz -= nz * 5; n.x += nx * 1.2; n.z += nz * 1.2; n.v *= 0.85; car.pop = Math.max(car.pop, 3); sfxThump(); shake = Math.max(shake, 0.25); }
-      } else if (thief) {
-        caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
-        tumble(n, nx, nz); n.alive = false; n.wait = 5;
-      } else if (n.stun <= 0) {
+      } else if (thief) catchThief(n, nx, nz);
+      else {
         const vp = car.vx * nx + car.vz * nz, vn = -(n.vx * nx + n.vz * nz);     // who was closing harder
-        if (vp > vn + 2 && vp > 9) {
+        if (n.stun > 0 ? vp > 7 : (vp > vn + 2 && vp > 9)) {     // a stunned or snagged hunter is there for the taking
           wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4);
           car.vx *= 0.75; car.vz *= 0.75; tumble(n, nx, nz); n.alive = false; n.wait = 10;
-        } else {
+        } else if (n.stun <= 0) {
           rammed++; popText('RAMMED!'); sfxThump(); shake = Math.max(shake, 0.5);
           car.vx += -nx * 12 + n.vx * 0.35; car.vz += -nz * 12 + n.vz * 0.35; car.pop = Math.max(car.pop, 7); car.rv += (Math.random() - .5) * 6;
           n.stun = 2.6; n.v = -5;
@@ -1409,6 +1590,90 @@ function updateNpcs(dt) {
     }
   }
 }
+
+// ───────────────────────── grappling hook ─────────────────────────
+let hook = null, hookCd = 0;      // hook: { phase: fly | pull | reel | back, x, y, z, vx, vy, vz, t, tgt, npc, hold }
+const HOOK_H = { oak: 7, pine: 7.5, palm: 7.5, cactus: 4, boulder: 1.6 };
+function hookSnags(x, y, z) {     // does the flying hook bite into scenery here
+  const ccx = Math.floor(x / CH), ccz = Math.floor(z / CH);
+  for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
+    const c = chunks.get(ckey(ccx + cx, ccz + cz));
+    if (c) for (const o of c.obs) {
+      const H = HOOK_H[o.kind];
+      if (!H || o.dead || y > o.y + H) continue;
+      if (Math.hypot(o.x - x, o.z - z) < (H > 5 && y > o.y + 3 ? 1.6 : o.r + 0.5)) return true;
+    }
+  }
+  for (const o of lmObs) if (y < o.y + 12 && Math.hypot(o.x - x, o.z - z) < o.r) return true;
+  return false;
+}
+function fireHook() {
+  if (state !== 'play') return;
+  if (hook) { if (hook.phase === 'pull' && hook.t > 0.2) releaseHook(); return; }     // press again to let go early
+  if (hookCd > 0) return;
+  const fx = Math.sin(car.h), fz = Math.cos(car.h), ox = car.x + fx * 1.2, oy = car.y + 2.4, oz = car.z + fz * 1.2;
+  let tgt = null, best = 0.5;       // aim assist: whoever is nearest the truck's nose, inside a cone ahead
+  for (const n of npcs) if (n.alive && !n.hooked) {
+    const dx = n.x - car.x, dz = n.z - car.z, d = Math.hypot(dx, dz);
+    if (d > 75 || d < 3) continue;
+    const a = Math.abs(Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz));
+    if (a < best) { best = a; tgt = n; }
+  }
+  let vx = fx * 0.985, vy = 0.17, vz = fz * 0.985;
+  if (tgt) { const dx = tgt.x - ox, dy = tgt.y + 1.2 - oy, dz = tgt.z - oz, l = Math.hypot(dx, dy, dz) || 1; vx = dx / l; vy = dy / l; vz = dz / l; }
+  hook = { phase: 'fly', x: ox, y: oy, z: oz, vx: vx * 100 + car.vx, vy: vy * 100, vz: vz * 100 + car.vz, t: 0, tgt, npc: null, hold: 0 };
+  tone(900, 0, 0.09, 'sawtooth', 0.05); tone(500, 0.05, 0.12, 'sawtooth', 0.04);
+}
+function releaseHook() {
+  if (!hook) return;
+  if (hook.npc) hook.npc.hooked = false;
+  hook.npc = null; hook.phase = 'back'; hookCd = Math.max(hookCd, 0.9);
+}
+function hookNpc(n) {
+  hook.npc = n; hook.phase = 'reel'; hook.t = 0; tone(240, 0, 0.12, 'square', 0.08); shake = Math.max(shake, 0.15);
+  if (n.type === 'thief') { n.hooked = true; hook.hold = 6; hookCd = 2; popText('HOOKED!'); }
+  else if (n.type === 'hunter') { n.stun = 6; n.v = 0; hook.hold = 0.5; hookCd = 3; popText('HUNTER SNAGGED — RAM IT'); }
+  else { n.hookSlow = 1.7; n.v = -6; hook.hold = 0.5; hookCd = 4; popText('YANKED!'); }
+}
+function updateHook(dt) {
+  if (hookCd > 0) hookCd -= dt;
+  if (!hook) return;
+  const h = hook, cx = car.x, cy = car.y + 2.2, cz = car.z; h.t += dt;
+  if (h.phase === 'fly') {
+    if (h.tgt && h.tgt.alive) { const dx = h.tgt.x - h.x, dy = h.tgt.y + 1.2 - h.y, dz = h.tgt.z - h.z, l = Math.hypot(dx, dy, dz) || 1; h.vx = dx / l * 105; h.vy = dy / l * 105; h.vz = dz / l * 105; }
+    else h.vy -= 14 * dt;
+    for (let s = 0; s < 3; s++) {
+      h.x += h.vx * dt / 3; h.y += h.vy * dt / 3; h.z += h.vz * dt / 3;
+      for (const n of npcs) if (n.alive && Math.hypot(n.x - h.x, n.z - h.z) < 2.4 && Math.abs(n.y + 1.2 - h.y) < 3) { hookNpc(n); return; }
+      const g = groundAt(h.x, h.z);
+      if (h.y <= g + 0.15 || hookSnags(h.x, h.y, h.z)) {     // missed everyone: it bites, and drags the truck to it
+        h.y = Math.max(h.y, g + 0.2); h.phase = 'pull'; h.t = 0; tone(160, 0, 0.1, 'square', 0.08);
+        for (let i = 0; i < 6; i++) puff(h.x, h.y + 0.3, h.z, [.75, .7, .6], 0.3, 2);
+        return;
+      }
+    }
+    if (Math.hypot(h.x - cx, h.z - cz) > 80) { h.phase = 'back'; hookCd = 0.6; }
+  } else if (h.phase === 'pull') {
+    const dx = h.x - cx, dy = h.y - cy, dz = h.z - cz, D = Math.hypot(dx, dy, dz) || 1;
+    if (D < 5.5 || h.t > 3) { releaseHook(); car.pop = Math.max(car.pop, 5); return; }
+    const ux = dx / D, uy = dy / D, uz = dz / D;
+    car.vx += ux * 62 * dt; car.vz += uz * 62 * dt;
+    const sp = Math.hypot(car.vx, car.vz); if (sp > 50) { car.vx *= 50 / sp; car.vz *= 50 / sp; }
+    if (car.air < 0.3) { if (uy > 0.12) car.pop = Math.max(car.pop, 4 + uy * 16); }      // hauled up off the ground
+    else car.vy += (uy * 50 + GRAV * 0.75) * dt;
+  } else if (h.phase === 'reel') {
+    const n = h.npc;
+    if (!n || !n.alive) { hook = null; return; }
+    h.x = n.x; h.y = n.y + 1.2; h.z = n.z; h.hold -= dt;
+    if (h.hold <= 0) releaseHook();
+  } else {
+    const dx = cx - h.x, dy = cy - h.y, dz = cz - h.z, D = Math.hypot(dx, dy, dz);
+    if (D < 3) { hook = null; return; }
+    const k = Math.min(1, 150 * dt / D); h.x += dx * k; h.y += dy * k; h.z += dz * k;
+  }
+}
+canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button === 0) fireHook(); });
+$('tHook').addEventListener('pointerdown', e => { e.preventDefault(); fireHook(); });
 
 // ───────────────────────── race mode ─────────────────────────
 function relocate(n) {     // the rival got stuck or swamped: winch it to dry land nearby, pointed at the waypoint
@@ -1509,6 +1774,7 @@ function render(time) {
   resize();
   const w = canvas.width, h = canvas.height, asp = w / h, sk = skyState(tod);
   gl.viewport(0, 0, w, h); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+  dayLight = sk.day;
   const fov = (60 + 9 * clamp(Math.abs(car.vF) / BOOSTV, 0, 1)) * Math.PI / 180;
   const view = lookAt(cam.eye, cam.tgt, [0, 1, 0]), VP = mul(persp(fov, asp, 0.3, 1400), view);
   const F = norm3([cam.tgt[0] - cam.eye[0], cam.tgt[1] - cam.eye[1], cam.tgt[2] - cam.eye[2]]), Rv = norm3(cross(F, [0, 1, 0])), Uv = cross(Rv, F);
@@ -1547,6 +1813,10 @@ function render(time) {
   const cm = mulN(base, T(0, car.sy, 0), RX(-car.pitch), RZ(car.roll)), wm = mulN(base, RX(-car.gp), RZ(car.gr));
   draw(carMesh.body, cm); draw(carMesh.glow, cm, { emis: 1 });
   WHEELS.forEach(([lx, lz], i) => draw(carMesh.wheel, mulN(wm, T(lx, 0.6, lz), RY(i < 2 ? car.steer * 0.45 : 0), RX(car.spin))));
+  if (hook) {     // the rope and the hook on the end of it
+    draw(cubeMesh, segMat([car.x, car.y + 2.2 + car.sy, car.z], [hook.x, hook.y, hook.z], 0.1), { tint: [.9, .85, .7], emis: 0.5 });
+    draw(cubeMesh, mulN(T(hook.x, hook.y, hook.z), RY(time * 9), Sc(.5, .5, .5)), { tint: [.3, .3, .36], emis: 0.3 });
+  }
   // flattened scenery, still tumbling
   for (const p of props) { const k = Math.min(1, (p.life - p.t) / 0.5); draw(p.mesh, mulN(T(p.x, p.y, p.z), RA(p.ax, 0, p.az, p.a), Sc(k, k, k))); }
   // thieves and hunters
@@ -1575,13 +1845,17 @@ function render(time) {
   for (const c of vis) if (c.water) { gl.bindVertexArray(c.water.vao); gl.drawElements(gl.TRIANGLES, c.water.count, gl.UNSIGNED_INT, 0); }
   gl.blendFunc(gl.ONE, gl.ONE);
   const pulse = 0.5 + 0.12 * Math.sin(time * 2.2);
+  for (const n of npcs) if (n.alive && n.type === 'hunter') {      // a hunter's light shows long before the truck does
+    const c = n.mode === 'chase' ? [1, .12, .08] : n.mode === 'search' ? [1, .6, .1] : [.6, .1, .1];
+    draw(beamMesh, mul(T(n.x, n.y + 2.6, n.z), Sc(0.5, 0.4, 0.5)), { emis: 1, fogMode: 1, fog: [330, 600], tint: c });
+  }
   if (race) {     // the race waypoint: a fat green beam you can see from across the island
     const cp = race.cp, gp = 0.55 + 0.2 * Math.sin(time * 5);
     draw(beamMesh, mul(T(cp.x, cp.y, cp.z), Sc(3.4, 1.6, 3.4)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, 1 * gp, .5 * gp] });
     draw(beamMesh, mul(T(cp.x, cp.y, cp.z), Sc(9, 0.05, 9)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, .9 * gp, .45 * gp] });
   }
-  for (const l of landmarks) if (!race && !l.found && Math.hypot(l.x - cam.eye[0], l.z - cam.eye[2]) < 330)
-    draw(beamMesh, T(l.x, l.y, l.z), { emis: 1, fogMode: 1, fog: [190, 330], tint: l === target ? [1 * pulse, .62 * pulse, .2 * pulse] : [.8 * pulse, .68 * pulse, .3 * pulse] });
+  for (const l of landmarks) if (!race && !l.found && Math.hypot(l.x - cam.eye[0], l.z - cam.eye[2]) < 460)
+    draw(beamMesh, T(l.x, l.y, l.z), { emis: 1, fogMode: 1, fog: [280, 460], tint: l === target ? [1 * pulse, .62 * pulse, .2 * pulse] : [.8 * pulse, .68 * pulse, .3 * pulse] });
   for (const c of crates) if (!c.got && Math.hypot(c.x - cam.eye[0], c.z - cam.eye[2]) < 150)
     draw(beamMesh, mul(T(c.x, c.y, c.z), Sc(0.4, 0.16, 0.4)), { emis: 1, fogMode: 1, fog: [90, 150], tint: [.2 * pulse, .7 * pulse, .9 * pulse] });
   gl.disable(gl.BLEND); gl.depthMask(true);
@@ -1599,6 +1873,7 @@ function frame(now) {
 }
 function tick(dt, now, drawIt = true) {
   if (state === 'play') {
+    updateHook(dt);
     updateCar(dt / 2); updateCar(dt / 2);
     playTime += dt; tod = (tod + dt / 540) % 1;
     saveT -= dt; if (saveT <= 0) { saveT = 5; doSave(); }
@@ -1639,7 +1914,7 @@ requestAnimationFrame(frame);
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the island…', '', 60); });
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
-window.__game = { car, landmarks, crates, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+window.__game = { car, landmarks, crates, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, fireHook, get hook() { return hook; }, canSee, inCover, roads, roadDist, onRoad, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
 })();
 </script>
 </body>
