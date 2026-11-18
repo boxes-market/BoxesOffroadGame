@@ -77,12 +77,13 @@
 <div id="hud">
   <div id="stats" class="panel">
     <div class="title">VOXEL DRIVER</div>
-    <div><b id="sFound">0</b> places found · <b id="sKinds">0</b>/13 kinds</div>
+    <div><b id="sFound">0</b> places found · <b id="sKinds">0</b>/14 kinds</div>
     <div><b id="sCrates">0</b> lost parcels</div>
     <div><b id="sExpl">0</b> km² charted</div>
     <div><b id="sKm">0.0</b> km driven</div>
     <div><b id="sSmash">0</b> things flattened</div>
     <div id="sNpc"></div>
+    <div id="sSky" style="color:#ffe9a6"></div>
     <div id="sFriend" style="color:#7cc4ff"></div>
   </div>
   <div id="track" class="panel">
@@ -95,7 +96,7 @@
   </div>
   <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div><div id="hookT" style="font-size:12px;opacity:.78"></div></div>
   <div id="miniWrap" class="panel"><canvas id="mini" width="180" height="180"></canvas></div>
-  <div id="help">WASD drive · Space handbrake · Shift boost · B wings · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
+  <div id="help">WASD drive · Space handbrake · Shift boost · B wings (G glitter bomb) · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
   <div id="stealth"></div>
   <div id="toast" class="panel"></div>
   <div id="pop"></div>
@@ -109,12 +110,13 @@
   <button data-k="hop" style="right:57px; bottom:286px">⤒</button>
   <button id="tHook" style="left:57px; bottom:286px; font-size:12px">HOOK</button>
   <button id="tWing" style="left:57px; bottom:360px; font-size:12px">WING</button>
+  <button id="tBomb" style="right:57px; bottom:360px; font-size:12px">BOMB</button>
 </div>
 
 <div id="ovStart" class="ov on"><div class="card panel">
   <h1>VOXEL DRIVER</h1>
   <p>An off-road expedition across an endless, procedurally generated voxel world: grassland, forest, desert, snowfields,
-  mountains, seas and cities, with no edge to reach. There are thirteen kinds of place to find, and always more of them further out.
+  mountains, seas and cities, with no edge to reach. There are fourteen kinds of place to find, and always more of them further out.
   Follow the waypoint arrow or pick your own line. Roads link every place and are quicker; side trails break off to quiet dead ends.</p>
   <div class="keys">
     <span>W A S D / arrows</span><span>Drive and steer</span>
@@ -122,6 +124,7 @@
     <span>Shift</span><span>Boost — fast enough and you plough through trees and bounce over rocks</span>
     <span>E</span><span>Hop. In the air, A / D spins, and Space with W / S flips. Red mushrooms are trampolines.</span>
     <span>B</span><span>Wings. Glide and fly: S pulls up, W dives, A / D bank into a turn, Shift is a push, Space is the airbrake. B again folds them.</span>
+    <span>G / right click</span><span>In flight: drop a glitter bomb. Whatever it lands on gets yassified: the ground, the trees, the buildings, and any thief or hunter standing there.</span>
     <span>F / click</span><span>Grappling hook. Hit a thief to reel it in or a hunter to stun it. Miss, and it drags you to wherever it lands.</span>
     <span>T</span><span>Switch to the next waypoint</span>
     <span>J · M</span><span>Journal of places to find · map of everywhere you have been</span>
@@ -158,7 +161,7 @@
 </div></div>
 
 <div id="ovWin" class="ov"><div class="card panel">
-  <h1>ALL THIRTEEN FOUND</h1>
+  <h1>EVERY KIND FOUND</h1>
   <p id="winText"></p>
   <div class="row"><button class="big" id="bKeep">Keep exploring</button><button id="bNew2">New world</button></div>
 </div></div>
@@ -245,10 +248,10 @@ function lookAt(e, c, u) {
 // ───────────────────────── world ─────────────────────────
 // The world has no edge. It is cut into regions, and everything in a region (its site, roads, parcels) is generated from the seed when first needed.
 const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 12;
-const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7;
-const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City'];
-const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5]];
-const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41]];
+const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8;
+const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op'];
+const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32]];
+const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22]];
 const DEEPC = [.42, .42, .45], LINEC = [.93, .9, .78], PARAC = [.6, .6, .62];
 const ROADC = TOPC.map((c, i) => mix3(c, i === SNOW ? [.74, .74, .78] : [.58, .52, .43], 0.8));
 let landmarks = [], crates = [], lmObs = [];      // the sites, parcels and landmark obstacles in the regions around the truck
@@ -352,7 +355,7 @@ function naturalBiome(x, z, h) {
 }
 function biomeAt(x, z, h) {
   const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH);
-  if (st && st.kind === 'city' && h >= SEA && hyp(x - st.x, z - st.z) < st.pad) return CITY;
+  if (st && (st.kind === 'city' || st.kind === 'grow') && h >= SEA && hyp(x - st.x, z - st.z) < st.pad) return st.kind === 'city' ? CITY : GROW;
   return naturalBiome(x, z, h);
 }
 // A city is a grid of streets 40 apart and 8 wide, a ring road round the edge, and blocks of four lots between.
@@ -365,6 +368,17 @@ function cityCell(st, wx, wz) {      // t: 0 street, 1 pavement, 2 building lot,
   if (hyp(lotX + 7 - st.x, lotZ + 7 - st.z) > st.pad - 24) return { t: 4, sx, sz };       // too near the ring road to build on
   const hh = hash2(lotX, lotZ, 707);
   return { t: hh < 0.14 ? 3 : hh < 0.21 ? 4 : 2, sx, sz, lotX, lotZ, hh, px: sx - ox, pz: sz - oz };
+}
+// A grow op: a fenced compound of plastic tunnels and open plots in long rows, with a yard in the middle.
+function growCell(st, wx, wz) {      // t: 0 bare ground, 1 track, 2 tunnel lot, 3 open plot, 4 fence line
+  const lx = wx - Math.floor(st.x) + 4004, lz = wz - Math.floor(st.z) + 4004, d = hyp(wx + .5 - st.x, wz + .5 - st.z);
+  if (d > st.pad - 5) return { t: d < st.pad - 3.8 ? 4 : 0 };
+  if (d < 21) return { t: 0, yard: true, yx: lx - 4004, yz: lz - 4004 };
+  const sx = lx % 13, sz = lz % 36;
+  if (sx < 4 || sz < 5) return { t: 1, sx, sz };
+  const lotX = wx - sx + 4, lotZ = wz - sz + 5;       // a lot is 9 wide and 31 long
+  for (const [ax, az] of [[0, 0], [9, 0], [0, 31], [9, 31], [4.5, 15.5]]) { const q = hyp(lotX + ax - st.x, lotZ + az - st.z); if (q > st.pad - 9 || q < 24) return { t: 0 }; }       // lots that would reach the fence or the yard stay bare
+  return { t: hash2(lotX, lotZ, 731) < 0.62 ? 2 : 3, px: sx - 4, pz: sz - 5, lotX, lotZ };
 }
 function onStreet(x, z) {
   const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH);
@@ -549,33 +563,37 @@ const LM_DEFS = [
 ];
 
 // ───────────────────────── regions: sites, roads, parcels ─────────────────────────
+const GROW_DEF = { id: 'grow', name: 'A grow op', lore: 'Plastic tunnels, water tanks, and a generator that never stops.', hint: 'Rows of white tunnels behind a fence, a long way from town.', pad: 105 };
 const CITY_DEF = { id: 'city', name: 'A city', lore: 'Streets, towers, and windows lit by somebody else.', hint: 'Towers on the horizon, and lit windows after dark.', pad: 150 };
-const KINDS = [...LM_DEFS, CITY_DEF];
+const KINDS = [...LM_DEFS, CITY_DEF, GROW_DEF];
 const CITY_A = ['Port', 'New', 'Fort', 'Lower', 'Saint', 'Old', 'East', 'Mount'], CITY_B = ['Larkin', 'Dunmore', 'Voxley', 'Carrow', 'Ashby', 'Quill', 'Marlow', 'Tessel', 'Brandt', 'Orrin'];
 function makeSite(rx, rz) {
   const start = rx === 0 && rz === 0, city = !start && ((rx === 1 && rz === 0) || hash2(rx, rz, 503) < 0.17);      // the region east of the start is always a city
-  const lo = city ? 226 : 110, span = REG - 2 * lo, id = rx + ',' + rz;
-  const want = city || start ? null : LM_DEFS[Math.floor(hash2(rx, rz, 504) * LM_DEFS.length)];     // the landmark this region would like, if the ground suits
+  const grow = !start && !city && ((rx === 0 && rz === 1) || hash2(rx, rz, 507) < 0.1), big = city || grow;      // the region south of the start is always a grow op
+  const lo = city ? 226 : grow ? 165 : 110, span = REG - 2 * lo, id = rx + ',' + rz;
+  const want = big || start ? null : LM_DEFS[Math.floor(hash2(rx, rz, 504) * LM_DEFS.length)];     // the landmark this region would like, if the ground suits
   let first = null, flatSpot = null;
   for (let i = 0; i < 26; i++) {
     const x = Math.floor(rx * REG + lo + hash2(rx * 53 + i, rz, 511) * span) + .5, z = Math.floor(rz * REG + lo + hash2(rx, rz * 53 + i, 512) * span) + .5;
     const hr = baseHeight(x, z), h = Math.floor(hr), alt = h - SEA;
     if (alt < 2) continue;
-    const rad = city ? 100 : want ? want.pad : 10, tol = city ? 16 : want ? want.flat * 1.5 : 5;
+    const rad = city ? 100 : grow ? 70 : want ? want.pad : 10, tol = big ? 16 : want ? want.flat * 1.5 : 5;
     let flat = true;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const hh = baseHeight(x + dx * rad, z + dz * rad); if (Math.abs(hh - hr) > tol || (city && hh < SEA)) flat = false; }
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const hh = baseHeight(x + dx * rad, z + dz * rad); if (Math.abs(hh - hr) > tol || (big && hh < SEA)) flat = false; }
     const base = { rx, rz, id, x, z, y: h, pad: 0, blend: 0 };
     if (!first) first = base;
     if (!flat) continue;
     if (!flatSpot) flatSpot = base;
     if (start) return { ...base, kind: 'start' };
     if (city) return { ...base, kind: 'city', def: CITY_DEF, pad: 150, blend: 70, name: CITY_A[Math.floor(hash2(rx, rz, 521) * CITY_A.length)] + ' ' + CITY_B[Math.floor(hash2(rx, rz, 522) * CITY_B.length)] };
+    if (grow) return { ...base, kind: 'grow', def: GROW_DEF, pad: 105, blend: 55 };
     if (want.want(naturalBiome(x, z, h), alt, x, z)) return { ...base, kind: 'landmark', def: want, pad: want.pad, blend: 10 };
   }
   if (start) return { ...(flatSpot || first || { rx, rz, id, x: 256.5, z: 256.5, y: Math.max(SEA + 2, Math.floor(baseHeight(256.5, 256.5))), pad: 0, blend: 0 }), kind: 'start' };
   if (!first) return null;         // open sea
   if (rx === 1 && rz === 0) return { ...(flatSpot || first), kind: 'city', def: CITY_DEF, pad: 150, blend: 70, name: 'Port Larkin' };      // the first city is always there, whatever the ground
-  if (flatSpot && !city) {         // the wanted landmark does not suit this ground: take one that does
+  if (rx === 0 && rz === 1) return { ...(flatSpot || first), kind: 'grow', def: GROW_DEF, pad: 105, blend: 55 };
+  if (flatSpot && !big) {         // the wanted landmark does not suit this ground: take one that does
     const b = naturalBiome(flatSpot.x, flatSpot.z, flatSpot.y), fits = LM_DEFS.filter(d => d.want(b, flatSpot.y - SEA, flatSpot.x, flatSpot.z));
     if (fits.length && hash2(rx, rz, 505) < 0.75) { const def = fits[Math.floor(hash2(rx, rz, 506) * fits.length)]; return { ...flatSpot, kind: 'landmark', def, pad: def.pad, blend: 10 }; }
   }
@@ -817,17 +835,19 @@ function makeMesh(mb) {
 function freeMesh(m) { if (!m) return; gl.deleteBuffer(m.vb); gl.deleteBuffer(m.ib); gl.deleteVertexArray(m.vao); }
 
 // ───────────────────────── chunks ─────────────────────────
+let GLAM = false;      // set while building scenery that stands in a yassified patch
+const PINKS = [[1, .6, .8], [.98, .72, .9], [.86, .72, 1], [1, .86, .94]], GLAMB = [[1, .62, .82], [.9, .7, 1], [1, .8, .9]], GLIT = [[1, .45, .8], [1, .85, .3], [.8, .6, 1], [1, 1, 1], [.5, 1, .95]];
 const FLOWERS = [[.95, .3, .35], [.98, .85, .3], [.9, .9, .95], [.7, .45, .9], [.98, .6, .2]];
 function decoOak(mb, x, y, z, r) {
   const th = 3 + Math.floor(r * 2.99), r2 = (r * 7.13) % 1;
   mb.box(x + .3, y, z + .3, x + .7, y + th, z + .7, jit(C.wood, .2, r2));
-  const lc = r2 > 0.93 ? [.85, .55, .15] : r2 > 0.86 ? [.8, .72, .2] : jit(C.leaf, .3, r2);
+  const lc = GLAM ? jit([1, .6, .8], .22, r2) : r2 > 0.93 ? [.85, .55, .15] : r2 > 0.86 ? [.8, .72, .2] : jit(C.leaf, .3, r2);
   if (r > 0.55) mb.box(x - 2, y + th, z - 2, x + 3, y + th + 1, z + 3, lc);
   mb.box(x - 1, y + th + (r > 0.55 ? 1 : 0), z - 1, x + 2, y + th + 2, z + 2, jit(lc, .12, r));
   mb.box(x, y + th + 2, z, x + 1, y + th + 3, z + 1, lc);
 }
 function decoPine(mb, x, y, z, r, snowy) {
-  const lc = jit([.16, .4, .26], .25, (r * 5.7) % 1), s = C.snow;
+  const lc = GLAM ? jit([.95, .55, .8], .2, (r * 5.7) % 1) : jit([.16, .4, .26], .25, (r * 5.7) % 1), s = C.snow;
   mb.box(x + .32, y, z + .32, x + .68, y + 2, z + .68, C.dwood);
   mb.box(x - 2, y + 2, z - 2, x + 3, y + 3, z + 3, lc);
   mb.box(x - 1, y + 3, z - 1, x + 2, y + 5, z + 2, lc);
@@ -835,31 +855,53 @@ function decoPine(mb, x, y, z, r, snowy) {
   if (snowy) { mb.box(x - 2, y + 3, z - 2, x + 3, y + 3.2, z + 3, s); mb.box(x - 1, y + 5, z - 1, x + 2, y + 5.2, z + 2, s); mb.box(x, y + 7, z, x + 1, y + 7.2, z + 1, s); }
 }
 function decoCactus(mb, x, y, z, r) {
-  const c = jit([.3, .58, .3], .2, r), h = 2 + Math.floor(r * 2.99);
+  const c = GLAM ? jit([.98, .6, .85], .2, r) : jit([.3, .58, .3], .2, r), h = 2 + Math.floor(r * 2.99);
   mb.box(x + .25, y, z + .25, x + .75, y + h, z + .75, c);
   mb.box(x + .75, y + 1.1, z + .35, x + 1.25, y + 1.5, z + .65, c); mb.box(x + 1.0, y + 1.5, z + .35, x + 1.25, y + 2.3, z + .65, c);
   if (r > .5) { mb.box(x - .25, y + 1.5, z + .35, x + .25, y + 1.9, z + .65, c); mb.box(x - .25, y + 1.9, z + .35, x, y + 2.6, z + .65, c); }
 }
 function decoPalm(mb, x, y, z, r) {
-  const h = 5 + Math.floor(r * 2.5), lc = jit([.3, .62, .25], .2, r);
+  const h = 5 + Math.floor(r * 2.5), lc = GLAM ? jit([1, .62, .85], .2, r) : jit([.3, .62, .25], .2, r);
   mb.box(x + .32, y, z + .32, x + .68, y + h, z + .68, [.6, .47, .3]);
   mb.box(x - 2, y + h, z + .2, x + 3, y + h + .3, z + .8, lc); mb.box(x + .2, y + h, z - 2, x + .8, y + h + .3, z + 3, lc);
   mb.box(x - 2.4, y + h - .5, z + .25, x - 1.6, y + h, z + .75, lc); mb.box(x + 2.6, y + h - .5, z + .25, x + 3.4, y + h, z + .75, lc);
   mb.box(x + .25, y + h - .5, z - 2.4, x + .75, y + h, z - 1.6, lc); mb.box(x + .25, y + h - .5, z + 2.6, x + .75, y + h, z + 3.4, lc);
 }
-function decoRock(mb, x, y, z, r) { mb.box(x + .1, y, z + .15, x + .9, y + .45 + r * .5, z + .85, jit(C.stone, .25, (r * 3.3) % 1)); }
+function decoRock(mb, x, y, z, r) { mb.box(x + .1, y, z + .15, x + .9, y + .45 + r * .5, z + .85, jit(GLAM ? [.9, .72, .98] : C.stone, .25, (r * 3.3) % 1)); }
 function decoBoulder(mb, x, y, z, r, snowy) {
-  const c = jit(C.stone, .25, (r * 3.3) % 1);
+  const c = jit(GLAM ? [.9, .72, .98] : C.stone, .25, (r * 3.3) % 1);
   mb.box(x - .2, y, z - .1, x + 1.5, y + 1.3, z + 1.4, c); mb.box(x + .9, y, z + .8, x + 2.1, y + .8, z + 1.9, jit(c, .2, r));
   if (snowy) mb.box(x - .2, y + 1.3, z - .1, x + 1.5, y + 1.45, z + 1.4, C.snow);
 }
-function decoBush(mb, x, y, z, r, col) { mb.box(x + .1, y, z + .1, x + .9, y + .45 + r * .35, z + .9, col); }
+function decoBush(mb, x, y, z, r, col) { if (GLAM) col = PINKS[Math.floor(r * 3.999) % 4]; mb.box(x + .1, y, z + .1, x + .9, y + .45 + r * .35, z + .9, col); }
 function decoLamp(mb, x, y, z) {
   mb.box(x + .4, y, z + .4, x + .6, y + 4.2, z + .6, C.dmetal);
   const f = mb.flag; mb.flag = f + 16;       // the lantern glows
   mb.box(x + .2, y + 4.2, z + .2, x + .8, y + 4.65, z + .8, [1, .9, .55]);
   mb.flag = f;
   mb.box(x + .15, y + 4.65, z + .15, x + .85, y + 4.8, z + .85, C.dmetal);
+}
+function decoPlant(mb, x, y, z, r) {      // a bushy plant in a row
+  const g1 = GLAM ? [1, .6, .82] : jit([.2, .52, .24], .25, r), g2 = GLAM ? [.9, .7, 1] : jit([.3, .62, .28], .25, (r * 3.1) % 1);
+  mb.box(x + .3, y, z + .3, x + .7, y + .5, z + .7, g1); mb.box(x + .12, y + .5, z + .12, x + .88, y + 1.15, z + .88, g2); mb.box(x + .28, y + 1.15, z + .28, x + .72, y + 1.6 + r * .3, z + .72, g1);
+}
+function decoFence(mb, x, y, z) {      // a post with a panel of mesh either way
+  mb.box(x + .4, y, z + .4, x + .6, y + 1.9, z + .6, [.5, .52, .55]);
+  mb.box(x, y + .25, z + .46, x + 1, y + 1.75, z + .54, [.62, .64, .66]); mb.box(x + .46, y + .25, z, x + .54, y + 1.75, z + 1, [.62, .64, .66]);
+}
+function hoopHouse(mb, obs, x, y, z, cx, cz) {      // a plastic tunnel, 7 wide and 29 long, with green showing at the ends
+  const L = 29, p1 = GLAM ? [1, .8, .92] : [.9, .92, .88], p2 = GLAM ? [1, .7, .88] : [.82, .86, .83], rib = [.5, .52, .5], green = [.2, .52, .25];
+  mb.box(x, y, z, x + 7, y + 1.7, z + L, p1); mb.box(x + .8, y + 1.7, z, x + 6.2, y + 2.6, z + L, p2); mb.box(x + 2.1, y + 2.6, z, x + 4.9, y + 3.1, z + L, p1);
+  for (let k = 0; k <= L; k += 4.8) { mb.box(x - .06, y, z + k, x + 7.06, y + 1.76, z + k + .2, rib); mb.box(x + .74, y + 1.7, z + k, x + 6.26, y + 2.66, z + k + .2, rib); }
+  for (const zz of [z - .05, z + L]) { mb.box(x + .9, y, zz, x + 6.1, y + 1.5, zz + .05, green); mb.box(x + 2.6, y, zz - .02, x + 4.4, y + 2.1, zz + .07, [.3, .28, .25]); }
+  obs.push({ kind: 'bldg', x: x + 3.5, z: z + L / 2, r: 0, rr: 16, x0: x, z0: z, x1: x + 7, z1: z + L, y, top: y + 3.1, cx, cz });
+}
+function yardItem(mb, obs, yx, yz, wx, y, wz, cx, cz) {      // what stands in the yard: water tanks, a trailer, a generator, pallets
+  const solid = (w, hh, d) => obs.push({ kind: 'bldg', x: wx + w / 2, z: wz + d / 2, r: 0, rr: Math.max(w, d), x0: wx, z0: wz, x1: wx + w, z1: wz + d, y, top: y + hh, cx, cz });
+  if ((yx === -11 || yx === -5) && yz === -9) { mb.box(wx, y, wz, wx + 4, y + 3.6, wz + 4, [.82, .86, .9]); mb.box(wx + .3, y + 3.6, wz + .3, wx + 3.7, y + 3.9, wz + 3.7, [.3, .5, .8]); mb.box(wx + 1.7, y + .4, wz - .12, wx + 2.3, y + 1, wz, [.3, .5, .8]); solid(4, 3.9, 4); }
+  else if (yx === 3 && yz === -12) { mb.box(wx, y + .5, wz, wx + 3.2, y + 3.3, wz + 9, [.9, .9, .86]); mb.box(wx + .4, y, wz + 1, wx + .9, y + .5, wz + 8, [.15, .15, .17]); mb.box(wx + 2.3, y, wz + 1, wx + 2.8, y + .5, wz + 8, [.15, .15, .17]); mb.box(wx - .05, y + 1.7, wz + 1.5, wx, y + 2.6, wz + 3.5, [.2, .32, .45]); mb.box(wx - .05, y + .6, wz + 5, wx, y + 2.7, wz + 6.2, [.5, .35, .22]); solid(3.2, 3.3, 9); }
+  else if (yx === 9 && yz === 3) { mb.box(wx, y, wz, wx + 2, y + 1.5, wz + 3.2, [.9, .55, .12]); mb.box(wx + .2, y + 1.5, wz + .3, wx + .5, y + 2.4, wz + .6, [.2, .2, .22]); mb.box(wx - .05, y + .4, wz + .5, wx, y + 1.1, wz + 2.7, [.2, .2, .22]); solid(2, 1.5, 3.2); }
+  else if ((yx === -3 && yz === 6) || (yx === 0 && yz === 9) || (yx === -9 && yz === 10)) { mb.box(wx, y, wz, wx + 1.3, y + .2, wz + 1.3, C.wood); mb.box(wx + .1, y + .2, wz + .1, wx + 1.2, y + 1 + (yx === 0 ? .7 : 0), wz + 1.2, yx === -3 ? [.25, .5, .28] : C.card); }
 }
 function decoShroom(mb, x, y, z) {
   const red = [.9, .16, .14], w = [.97, .95, .9];
@@ -878,22 +920,25 @@ const DECO = {
   rock: { build: decoRock, r: .55, ox: .5, roll: 8, bh: s => .45 + s * .5 },
   boulder: { build: decoBoulder, r: 1.15, ox: .8, roll: 18, bh: () => 1.3 },
   shroom: { build: decoShroom, r: 1.3, ox: .5 },
+  plant: { build: decoPlant, r: .4, ox: .5, bits: [.25, .6, .28] },
+  fence: { build: decoFence, r: .45, ox: .5, knock: 3, mass: .03, stump: [.5, .52, .55], bits: [.6, .62, .64] },
   lamp: { build: decoLamp, r: .3, ox: .5, knock: 6, mass: .04, stump: C.dmetal, bits: [1, .9, .55] },
 };
 const felled = new Set(), dirty = new Set(), props = [], bumps = [];
 
+const GROWC = [[.52, .47, .4], [.6, .52, .4], [.44, .38, .29], [.36, .27, .18], [.48, .42, .32]];      // yard and bare ground, track, tunnel lot, plot soil, fence line
 const CITYC = [[.2, .2, .23], [.62, .62, .64], [.42, .42, .45], TOPC[GRASS], [.58, .56, .52], [.86, .76, .32]];      // street, pavement, lot, park, plaza, lane paint
 const BLDG = [[.62, .6, .58], [.5, .54, .6], [.72, .62, .5], [.56, .4, .34], [.44, .48, .52], [.78, .76, .72], [.4, .5, .56]];
 function cityBuilding(mb, obs, st, x, y, z, cx, cz) {      // a block with rows of windows, some lit, taller towards the middle of town
   const W = 12, central = 1.25 - Math.hypot(x + 6 - st.x, z + 6 - st.z) / st.pad, r1 = hash2(x, z, 711), r2 = hash2(x, z, 712);
-  const hgt = Math.round(5 + r1 * r1 * 30 * central + r2 * 5), col = BLDG[Math.floor(r2 * BLDG.length * 0.999)], f = mb.flag;
+  const hgt = Math.round(5 + r1 * r1 * 30 * central + r2 * 5), col = GLAM ? GLAMB[Math.floor(r2 * 2.999)] : BLDG[Math.floor(r2 * BLDG.length * 0.999)], f = mb.flag, glam = GLAM;
   mb.box(x, y, z, x + W, y + hgt, z + W, col);
   mb.box(x + .6, y + hgt, z + .6, x + W - .6, y + hgt + .5, z + W - .6, mix3(col, [.2, .2, .22], .5));
   if (r1 > .45) mb.box(x + 2 + r2 * 4, y + hgt + .5, z + 2 + r1 * 4, x + 5 + r2 * 4, y + hgt + 2.2, z + 5 + r1 * 4, [.5, .52, .55]);
   if (hgt > 26) mb.box(x + 5.8, y + hgt + .5, z + 5.8, x + 6.2, y + hgt + 6, z + 6.2, [.3, .3, .33]);
   mb.box(x + 5, y, z - .06, x + 7, y + 2.4, z, [.16, .14, .13]);
   for (let fy = 3; fy + 1.8 < hgt; fy += 3) for (let k = 1; k + 1.3 < W; k += 2) for (let face = 0; face < 4; face++) {
-    const lit = hash2(x + k * 7 + face * 131, z + fy * 17, 713) < 0.24, c = lit ? [1, .88, .52] : [.15, .21, .31], y0 = y + fy, y1 = y0 + 1.7;
+    const lit = hash2(x + k * 7 + face * 131, z + fy * 17, 713) < (glam ? 0.8 : 0.24), c = lit ? (glam ? [1, .78, .95] : [1, .88, .52]) : [.15, .21, .31], y0 = y + fy, y1 = y0 + 1.7;
     mb.flag = lit ? f + 16 : f;
     if (face === 0) mb.quad(x + k, y0, z - .03, x + k + 1.3, y0, z - .03, x + k + 1.3, y1, z - .03, x + k, y1, z - .03, c[0], c[1], c[2], 5);
     else if (face === 1) mb.quad(x + k, y0, z + W + .03, x + k + 1.3, y0, z + W + .03, x + k + 1.3, y1, z + W + .03, x + k, y1, z + W + .03, c[0], c[1], c[2], 4);
@@ -909,6 +954,7 @@ function buildChunk(cx, cz) {
   const g = (x, z) => hm[(z + 1) * W + x + 1];
   const mb = new MB(), wb = new MB(), obs = [];
   const st = siteOf(ox >> RSH, oz >> RSH), near = st && st.pad ? [st] : [];       // a chunk never straddles two regions
+  const gzs = glamZones.filter(q => Math.abs(q[0] - ox - 8) < q[2] + 10 && Math.abs(q[1] - oz - 8) < q[2] + 10);      // yassified patches that reach this chunk
   const AO = [0.58, 0.74, 0.88, 1];
   const ao = (s1, s2, c) => AO[(s1 && s2) ? 0 : 3 - (s1 + s2 + c)];
   for (let z = 0; z < CH; z++) for (let x = 0; x < CH; x++) {
@@ -918,14 +964,18 @@ function buildChunk(cx, cz) {
     let tc = TOPC[b];
     if (rdv < 3 && h >= SEA) tc = rmain && rdv < 0.6 && (((wx >> 2) + (wz >> 2)) & 1) ? mix3(ROADC[b], LINEC, 0.6) : ROADC[b];        // a dashed centre line on the main roads
     else if (rdv < 4.9 && h >= SEA && baseHeight(wx + .5, wz + .5) < SEA - 0.3) tc = PARAC;         // stone parapets where a road crosses water
-    let cc = null;
+    let cc = null, gc = null;
+    if (b === GROW) { gc = growCell(st, wx, wz); tc = GROWC[gc.t]; }
     if (b === CITY) {      // city ground: asphalt with lane dashes, pavement, lots, parks
       cc = cityCell(st, wx, wz);
       tc = cc.t === 0 ? (!cc.ring && ((cc.sx >= 8 && (cc.sz === 3 || cc.sz === 4) && ((cc.lx >> 2) & 1)) || (cc.sz >= 8 && (cc.sx === 3 || cc.sx === 4) && ((cc.lz >> 2) & 1))) ? CITYC[5] : CITYC[0]) : CITYC[cc.t];
     }
     const n = g(x, z - 1) > h, s = g(x, z + 1) > h, w = g(x - 1, z) > h, e = g(x + 1, z) > h;
     const a00 = ao(w, n, g(x - 1, z - 1) > h), a01 = ao(w, s, g(x - 1, z + 1) > h), a11 = ao(e, s, g(x + 1, z + 1) > h), a10 = ao(e, n, g(x + 1, z - 1) > h);
+    GLAM = gzs.length > 0 && h >= SEA && gzs.some(q => hyp(wx + .5 - q[0], wz + .5 - q[1]) < q[2] * (0.8 + rnd * 0.28));
+    if (GLAM) { tc = PINKS[Math.floor(rnd * 3.999)]; if (hash2(wx, wz, 919) > 0.9) mb.flag = 16; }       // pink ground, with the odd block that glitters
     mb.quad(wx, h, wz, wx, h, wz + 1, wx + 1, h, wz + 1, wx + 1, h, wz, tc[0] * k, tc[1] * k, tc[2] * k, 2, a00, a01, a11, a10, a00 + a11 > a01 + a10);
+    mb.flag = 0;
     // sides
     for (let d = 0; d < 4; d++) {
       const dx = d === 0 ? 1 : d === 1 ? -1 : 0, dz = d === 2 ? 1 : d === 3 ? -1 : 0, nh = g(x + dx, z + dz);
@@ -946,6 +996,16 @@ function buildChunk(cx, cz) {
     if (h < SEA) {
       const dp = clamp((SEA - h) / 6, 0, 1), wr = lerp(.36, .1, dp), wg = lerp(.74, .36, dp), wbl = lerp(.84, .66, dp);
       wb.quad(wx, WATER, wz, wx, WATER, wz + 1, wx + 1, WATER, wz + 1, wx + 1, WATER, wz, wr, wg, wbl, 2);
+      continue;
+    }
+    if (gc) {      // grow-op scenery: tunnels, rows of plants, the fence, and the yard
+      mb.flag = 8;
+      const gput = (kind, seed) => { if (felled.has(wx + ',' + wz)) return; const D = DECO[kind]; D.build(mb, wx, h, wz, seed); obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt: undefined, cx, cz, bh: 0 }); };
+      if (gc.t === 2) { if (gc.px === 0 && gc.pz === 0) hoopHouse(mb, obs, gc.lotX + 1, h, gc.lotZ + 1, cx, cz); }
+      else if (gc.t === 3) { if (gc.px % 2 === 1 && gc.pz % 2 === 0) gput('plant', hash2(wx, wz, 303)); }
+      else if (gc.t === 4) { if (rdv > 5.5) gput('fence', 0); }       // with a gap where the road comes in
+      else if (gc.yard) yardItem(mb, obs, gc.yx, gc.yz, wx, h, wz, cx, cz);
+      else if (gc.t === 1 && gc.sx === 0 && gc.sz === 2 && hash2(wx, wz, 741) < 0.5) gput('lamp', 0);
       continue;
     }
     if (cc) {      // city scenery: a building on each lot, trees in the parks, lamps along the pavements
@@ -969,6 +1029,10 @@ function buildChunk(cx, cz) {
       obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt, cx, cz, bh: D.bh ? D.bh(seed) : 0 });
     };
     const rockKind = r3 > 0.7 ? 'boulder' : 'rock';
+    if (GLAM && r2 > 0.62) {       // flowers come up all over a yassified patch
+      mb.box(wx + .45, h, wz + .45, wx + .55, h + .4, wz + .55, [.6, .85, .6]); mb.box(wx + .3, h + .4, wz + .3, wx + .7, h + .7, wz + .7, PINKS[Math.floor(r3 * 3.999)]); mb.box(wx + .42, h + .7, wz + .42, wx + .58, h + .78, wz + .58, [1, .9, .4]);
+      continue;
+    }
     if (rdv < 7.6) {      // the verge: lamps along main roads, hedgerows in stretches, flowers on the grass
       if (rdv < 5.6 && rmain && hash2(wx, wz, 909) < 0.02) put('lamp', r3);
       else if (rdv >= 5.6 && rdv < 6.8 && (b === GRASS || b === FOREST) && vnoise(wx / 45, wz / 45, 808) > 0.58 && r2 < 0.5) put('bush', 0.4 + r3 * 0.6, jit(C.leaf2, .25, r3));
@@ -1003,6 +1067,7 @@ function buildChunk(cx, cz) {
       if (r2 < 0.014) put(rockKind, r3, false);
     }
   }
+  GLAM = false;
   return { cx, cz, mesh: makeMesh(mb), water: makeMesh(wb), obs };
 }
 const chunks = new Map(); let queue = [], lastCC = '';
@@ -1086,6 +1151,93 @@ const cloudMesh = (() => {       // one square of sky, drawn as a 3 by 3 patch t
   return makeMesh(m);
 })();
 
+// ───────────────────────── the sky: things to fly to, through and around ─────────────────────────
+// Like everything else, what is up there is worked out per region from the seed, so two players see the same sky.
+const skyCache = new Map(), newSky = () => ({ islands: [], rings: [], balloons: [], thermals: [], blimps: [], drones: [] });
+function skyOf(rx, rz) {
+  const k = rkey(rx, rz);
+  let sk = skyCache.get(k);
+  if (sk) return sk;
+  const x0 = rx * REG, z0 = rz * REG, Hh = (i, salt) => hash2(rx * 7 + i, rz * 13 + i * 3, salt), gy = (x, z) => Math.max(baseHeight(x, z), SEA);
+  sk = newSky();
+  for (let i = 0, n = 2 + (Hh(0, 801) > 0.5 ? 1 : 0); i < n; i++) {       // floating islands, each with a crystal on top
+    const x = Math.floor(x0 + 60 + Hh(i, 802) * (REG - 120)) + .5, z = Math.floor(z0 + 60 + Hh(i, 803) * (REG - 120)) + .5, v = Math.floor(Hh(i, 804) * 2.999);
+    sk.islands.push({ id: rx + ',' + rz + ',' + i, x, z, v, r: [7, 10, 14][v], top: Math.round(gy(x, z) + 40 + Hh(i, 805) * 46), got: false });
+  }
+  let x = x0 + 90 + Hh(1, 811) * (REG - 180), z = z0 + 90 + Hh(2, 812) * (REG - 180), a = Hh(3, 813) * 6.2832, y = gy(x, z) + 26 + Hh(4, 814) * 30;       // a curving trail of rings
+  const turn = (Hh(5, 815) - .5) * 0.5;
+  for (let i = 0; i < 7; i++) {
+    sk.rings.push({ x, y, z, yaw: a, trail: sk.rings, t: 0, side: 0 });
+    a += turn; x += Math.sin(a) * 38; z += Math.cos(a) * 38; y = Math.max(gy(x, z) + 14, y + (Hh(i + 6, 816) - .5) * 14);
+  }
+  for (let i = 0; i < 2; i++) {       // balloons drifting in slow circles
+    const cx = x0 + 70 + Hh(i, 821) * (REG - 140), cz = z0 + 70 + Hh(i, 822) * (REG - 140);
+    sk.balloons.push({ cx, cz, rad: 12 + Hh(i, 823) * 20, ph: Hh(i, 824) * 6.2832, y: gy(cx, cz) + 32 + Hh(i, 825) * 42, v: Math.floor(Hh(i, 826) * 2.999), dead: 0 });
+  }
+  for (let i = 0, n = 1 + (Hh(0, 831) > 0.5 ? 1 : 0); i < n; i++) {       // thermals: columns of rising air
+    const tx = x0 + 50 + Hh(i, 832) * (REG - 100), tz = z0 + 50 + Hh(i, 833) * (REG - 100), base = gy(tx, tz);
+    sk.thermals.push({ x: tx, z: tz, r: 10, base, top: base + 120 });
+  }
+  if (Hh(0, 841) < 0.5) {       // a blimp on a long slow circuit
+    const cx = x0 + 256 + (Hh(1, 842) - .5) * 160, cz = z0 + 256 + (Hh(2, 843) - .5) * 160;
+    sk.blimps.push({ cx, cz, rad: 90 + Hh(3, 844) * 70, ph: Hh(4, 845) * 6.2832, y: gy(cx, cz) + 78 + Hh(5, 846) * 30, dir: Hh(6, 847) < 0.5 ? 1 : -1 });
+  }
+  if (Hh(0, 851) < 0.38) {      // now and then, a drone circling high up
+    const cx = x0 + 256 + (Hh(1, 852) - .5) * 200, cz = z0 + 256 + (Hh(2, 853) - .5) * 200;
+    sk.drones.push({ cx, cz, rad: 110 + Hh(3, 854) * 60, ph: Hh(4, 855) * 6.2832, y: gy(cx, cz) + 100 + Hh(5, 856) * 20, next: 0 });
+  }
+  skyCache.set(k, sk);
+  return sk;
+}
+// where a circling craft is and which way it points: [x, y, z, yaw]
+const orbitPos = (o, now, w) => { const a = now * w * (o.dir || 1) + o.ph, d = o.dir || 1; return [o.cx + Math.cos(a) * o.rad, o.y, o.cz + Math.sin(a) * o.rad, Math.atan2(-Math.sin(a) * d, Math.cos(a) * d)]; };
+const balloonPos = (b, now) => { const a = now * 0.035 + b.ph; return [b.cx + Math.cos(a) * b.rad, b.y + Math.sin(now * 0.4 + b.ph) * 1.5, b.cz + Math.sin(a) * b.rad]; };
+let skyAct = newSky();      // what is in the sky around the truck
+const skyStats = { rings: 0, trails: 0, balloons: 0 }, gotCrystals = new Set(), glamZones = [], bombs = [], blasts = [];
+let bombAmmo = 3, bombT = 0, thermalT = 0, skyPuffT = 0;
+const islandMesh = [7, 10, 14].map((r, v) => {
+  const m = new MB(); m.lo = .86;
+  const g = TOPC[GRASS], rock = DEEPC;
+  m.box(-r, -1.2, -r * .6, r, 0, r * .6, g); m.box(-r * .6, -1.2, -r, r * .6, 0, r, g); m.box(-r * .85, -1.2, -r * .85, r * .85, 0, r * .85, jit(g, .2, .3));      // a rough disc of turf, top at y = 0
+  let rr = r * .82, y = -1.2;
+  for (let i = 0; i < 5; i++) { const hh = 1.6 + i * .7; m.box(-rr, y - hh, -rr * .9, rr, y, rr * .9, i < 1 ? SIDEC[GRASS] : jit(rock, .2, i * .23)); y -= hh; rr *= .68; }      // earth, then rock tapering away underneath
+  m.box(-.5, y - 2.5, -.5, .5, y, .5, rock);
+  decoOak(m, Math.round(-r * .45), 0, Math.round(-r * .3), .7 - v * .2);
+  if (v > 0) decoPine(m, Math.round(r * .4), 0, Math.round(r * .25), .5, false);
+  if (v > 1) decoOak(m, Math.round(-r * .1), 0, Math.round(r * .5), .3);
+  decoRock(m, Math.round(r * .3), 0, Math.round(-r * .5), .4);
+  m.box(r * .55, -14 - v * 4, -.6, r * .55 + .5, 0.05, .6, [.55, .8, .95]);       // a waterfall off the edge
+  return makeMesh(m);
+});
+const blimpMesh = (() => {      // nose towards +Z, about 38 long
+  const m = new MB(); m.lo = .9;
+  const hull = [.86, .88, .9], red = [.85, .2, .2];
+  [2.4, 4.6, 6.4, 7.4, 7.8, 7.8, 7.2, 6, 4.4, 2.6].forEach((w, i) => m.cbox(0, -w / 2, -17.1 + i * 3.8, w, w, 3.8, i === 9 || i === 4 ? red : hull));
+  m.cbox(0, -6.4, 1, 2.6, 2.2, 7, [.3, .32, .36]); m.cbox(0, -5.9, 1, 2.7, .7, 5, [.55, .8, .95]);       // the gondola and its windows
+  m.box(-.2, 1.5, -18.5, .2, 6, -13, red); m.box(-.2, -6, -18.5, .2, -1.5, -13, red); m.box(-6, -.2, -18.5, -1.5, .2, -13, red); m.box(1.5, -.2, -18.5, 6, .2, -13, red);       // tail fins
+  return makeMesh(m);
+})();
+const droneMesh = (() => {      // nose towards +Z
+  const m = new MB(); m.lo = .92;
+  const g = [.62, .64, .67], d = [.3, .31, .34];
+  m.box(-.55, -.45, -4, .55, .45, 3.2, g); m.box(-.7, -.2, 2.2, .7, .75, 4.4, g); m.box(-.4, -.95, 2.6, .4, -.45, 3.6, d);       // fuselage, the bulge at the nose, the sensor under it
+  m.box(-8.5, .1, -.9, 8.5, .28, .5, g);       // long thin wings
+  m.box(-2.4, .2, -4.2, -.3, 1.9, -3.6, g); m.box(.3, .2, -4.2, 2.4, 1.9, -3.6, g);       // the tail
+  m.box(-1.3, -.1, -4.5, 1.3, .1, -4.3, d);
+  m.box(-3.5, -.35, -.4, -3.1, -.05, 1.4, d); m.box(3.1, -.35, -.4, 3.5, -.05, 1.4, d);       // what it carries
+  return makeMesh(m);
+})();
+const rocketMesh = (() => { const m = new MB(); m.lo = 1; m.box(-.2, -.2, -1.1, .2, .2, .9, [.75, .76, .78]); m.box(-.14, -.14, .9, .14, .14, 1.3, [.85, .2, .15]); m.box(-.5, -.05, -1.2, .5, .05, -.7, [.3, .3, .33]); m.box(-.05, -.5, -1.2, .05, .5, -.7, [.3, .3, .33]); return makeMesh(m); })();
+const rockets = [];
+const ringMesh = (() => { const m = new MB(); m.lo = 1; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.2832, x = Math.cos(a) * 5.7, y = Math.sin(a) * 5.7; m.box(x - .62, y - .62, -.32, x + .62, y + .62, .32, [1, .82, .28]); } return makeMesh(m); })();
+const balloonMesh = [[[.95, .3, .3], [.98, .95, .9]], [[.25, .55, .95], [.98, .85, .3]], [[.6, .35, .9], [.4, .9, .7]]].map(([c1, c2]) => {
+  const m = new MB(); m.lo = .92;
+  [2.2, 3.8, 5.2, 5.8, 5.8, 5.2, 3.8, 2.2].forEach((w, i) => m.cbox(0, 2.4 + i * 1.25, 0, w, 1.25, w, i % 2 ? c1 : c2));
+  m.cbox(0, -1, 0, 1.6, 1.1, 1.6, C.wood);
+  for (const [a, b] of [[-.7, -.7], [.7, -.7], [-.7, .7], [.7, .7]]) m.box(a - .05, 0, b - .05, a + .05, 2.5, b + .05, C.dwood);
+  return makeMesh(m);
+});
+
 // ───────────────────────── map: painted a region at a time, as you explore ─────────────────────────
 const MPX = 8, MTN = REG / MPX, EG = 16, EC = REG / EG, REVEAL = 85;
 const mapTiles = new Map();      // region key → { rx, rz, cv, fog, fctx, bits, n }
@@ -1150,7 +1302,7 @@ const MAXV = 27, BOOSTV = 38, ACC = 20, GRAV = 26, SLOPE = 10.5;
 const TOPV = ACC * 1.3 / (ACC * 1.3 / BOOSTV + 0.12);     // what the truck actually tops out at on the flat with boost held (about 32)
 const car = { x: spawn.x, z: spawn.z, y: 0, vy: 0, h: spawn.h, vx: 0, vz: 0, pitch: 0, roll: 0, steer: 0, spin: 0, g: 0, hs: 0, air: 0, biome: GRASS, vF: 0,
   pop: 0, sy: 0, sv: 0, pv: 0, rv: 0, gp: 0, gr: 0, flip: 0, yawAcc: 0, mb: 0,
-  fly: false, wing: 0, fp: 0, fb: 0 };      // wings out, how far unfolded, and the nose and bank angles in flight
+  fly: false, wing: 0, fp: 0, fb: 0, plat: null };      // wings out, how far unfolded, and the nose and bank angles in flight
 let lastSafe = { x: spawn.x, z: spawn.z, h: spawn.h }, safeT = 0;
 let state = 'start', playTime = 0, tod = 0.2, odo = 0, won = false, pinned = null, target = null;
 let camYaw = spawn.h + 2.4, camY = 0, lookY = 0, camMode = 0, muted = false, camRoll = 0, camBack = 0;
@@ -1179,11 +1331,20 @@ function refreshActive(force) {      // work out which sites and parcels are nea
   }
   for (let cz = Math.floor(car.z - 230) >> RSH; cz <= Math.floor(car.z + 230) >> RSH; cz++) for (let cx = Math.floor(car.x - 230) >> RSH; cx <= Math.floor(car.x + 230) >> RSH; cx++)
     for (const c of regionCrates(cx, cz)) { c.got = gotCrates.has(c.id); crates.push(c); }
+  skyAct = newSky();
+  for (let cz = Math.floor(car.z - 560) >> RSH; cz <= Math.floor(car.z + 560) >> RSH; cz++) for (let cx = Math.floor(car.x - 560) >> RSH; cx <= Math.floor(car.x + 560) >> RSH; cx++) {
+    const sk = skyOf(cx, cz);
+    for (const kind in skyAct) for (const o of sk[kind]) skyAct[kind].push(o);
+  }
+  for (const p of skyAct.islands) p.got = gotCrystals.has(p.id);
   if (pinned && !remote.alive && !landmarks.includes(pinned)) pinned = null;
 }
 if (save) {
   for (const [id, kind] of save.found || []) foundSites.set(id, kind);
   for (const id of save.crates || []) gotCrates.add(id);
+  for (const id of save.crystals || []) gotCrystals.add(id);
+  if (save.sky) Object.assign(skyStats, save.sky);
+  for (const z of save.glam || []) glamZones.push(z);
   if (save.car && groundAt(save.car.x, save.car.z) >= SEA) { car.x = save.car.x; car.z = save.car.z; car.h = save.car.h; lastSafe = { x: car.x, z: car.z, h: car.h }; }
   for (const k in save.tiles || {}) {
     const [rx, rz] = k.split(',').map(Number), t = mapTile(rx, rz), hex = save.tiles[k];
@@ -1195,7 +1356,7 @@ if (save) {
   playTime = save.time || 0; tod = save.tod ?? 0.2; odo = save.odo || 0; won = !!save.won; smashed = save.smashed || 0;
   caught = save.caught || 0; wrecked = save.wrecked || 0; rammed = save.rammed || 0; shaken = save.shaken || 0;
 }
-function settle() { car.g = car.y = groundAt(car.x, car.z); { const fx = Math.sin(car.h), fz = Math.cos(car.h); car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4; } car.vy = car.pop = car.sy = car.sv = car.flip = car.yawAcc = 0; car.fly = false; airT = 0; camY = car.y + 5; lookY = car.y; }
+function settle() { car.g = car.y = groundAt(car.x, car.z); { const fx = Math.sin(car.h), fz = Math.cos(car.h); car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4; } car.vy = car.pop = car.sy = car.sv = car.flip = car.yawAcc = 0; car.fly = false; car.plat = null; airT = 0; camY = car.y + 5; lookY = car.y; }
 settle(); refreshActive(true);
 function doSave() {
   if (NOSAVE) return;
@@ -1204,7 +1365,7 @@ function doSave() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       seed: SEED, found: [...foundSites], crates: [...gotCrates], tiles,
-      car: { x: lastSafe.x, z: lastSafe.z, h: lastSafe.h }, time: playTime, tod, odo, won, smashed, caught, wrecked, rammed, shaken,
+      car: { x: lastSafe.x, z: lastSafe.z, h: lastSafe.h }, time: playTime, tod, odo, won, smashed, caught, wrecked, rammed, shaken, sky: skyStats, crystals: [...gotCrystals], glam: glamZones.slice(-150),
     }));
   } catch (e) {}
 }
@@ -1248,7 +1409,7 @@ function sfxBoing() {
 }
 
 // ───────────────────────── HUD ─────────────────────────
-const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc'), stealth: $('stealth'), kinds: $('sKinds'), friend: $('sFriend'), hook: $('hookT') };
+const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc'), stealth: $('stealth'), kinds: $('sKinds'), friend: $('sFriend'), hook: $('hookT'), sky: $('sSky') };
 function popText(t) { el.pop.textContent = t; el.pop.classList.remove('show'); void el.pop.offsetWidth; el.pop.classList.add('show'); }
 let toastT = 0;
 function toast(kicker, name, line, secs = 5) {
@@ -1314,7 +1475,8 @@ function updateHud() {
   }
   el.stealth.style.display = st ? 'block' : 'none'; el.stealth.textContent = st; el.stealth.style.color = sc;
   el.npc.innerHTML = (opts.thieves ? `<b>${caught}</b> thieves caught<br>` : '') + (opts.hunters ? `<b>${wrecked}</b> hunters wrecked · <b>${shaken}</b> lost · <b>${rammed}</b> hits taken` : '');
-  el.hook.textContent = hook ? 'Hook out' : hookCd > 0 ? 'Hook ready in ' + Math.ceil(hookCd) + ' s' : 'Hook ready';
+  el.hook.textContent = (hook ? 'Hook out' : hookCd > 0 ? 'Hook ready in ' + Math.ceil(hookCd) + ' s' : 'Hook ready') + (car.fly ? ' · Bombs ' + '●'.repeat(bombAmmo) + '○'.repeat(3 - bombAmmo) : '');
+  el.sky.textContent = skyStats.rings + gotCrystals.size + skyStats.balloons || car.fly ? `Sky: ${skyStats.rings} rings · ${gotCrystals.size} crystals · ${skyStats.balloons} balloons` : '';
   el.friend.textContent = ROOM ? (remote.alive ? 'Friend: ' + whereText(remote) : NET.status) : '';
   el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.fly ? 'Gliding · ' + Math.max(0, Math.round(car.air)) + ' m up' : car.road && car.biome !== CITY ? 'Road' : BIOME_NAME[car.biome];
   if (race) {
@@ -1412,6 +1574,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyT') cycleTarget();
   else if (e.code === 'KeyF') fireHook();
   else if (e.code === 'KeyB') toggleFly();
+  else if (e.code === 'KeyG') dropBomb();
   else if (e.code === 'KeyH') { tone(392, 0, 0.35, 'square', 0.07); tone(494, 0, 0.35, 'square', 0.07); }
   else if (e.code === 'Digit1') { setOpt('thieves', !opts.thieves); toast('PARCEL THIEVES', opts.thieves ? 'On the loose' : 'Off', opts.thieves ? 'Yellow buggies. Run them down to get the parcel back.' : '', 2.5); }
   else if (e.code === 'Digit2') { setOpt('hunters', !opts.hunters); toast('HUNTER TRUCKS', opts.hunters ? 'Coming for you' : 'Off', opts.hunters ? 'Outrun them, or hit them harder than they hit you.' : '', 2.5); }
@@ -1436,10 +1599,10 @@ if (save && (save.found || []).length + (save.crates || []).length > 0) {
 }
 
 // ───────────────────────── physics ─────────────────────────
-const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5];      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
-const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52]];
+const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8];      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
+const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3]];
 function puff(x, y, z, col, size, up, em = 0.1) {
-  if (parts.length > 170) parts.shift();
+  if (parts.length > 260) parts.shift();
   parts.push({ x, y, z, vx: (Math.random() - .5) * 2, vy: up + Math.random() * 1.5, vz: (Math.random() - .5) * 2, life: 0.7 + Math.random() * 0.4, t: 0, size, col, em });
 }
 function touch(o) {   // deepest contact between the truck's two body circles and an obstacle
@@ -1463,7 +1626,7 @@ function knockDown(o, sp, burst, src = car) {
   if (ROOM && NET.fell.length < 4000) NET.fell.push(o.wx + ',' + o.wz);
   const dx = sp > 0.1 ? src.vx / sp : 0, dz = sp > 0.1 ? src.vz / sp : 1;
   if (!burst) {
-    const m = new MB(); D.build(m, -.5, 0, -.5, o.seed, o.opt);
+    const m = new MB(); GLAM = glamAt(o.x, o.z); D.build(m, -.5, 0, -.5, o.seed, o.opt); GLAM = false;
     if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
     props.push({ mesh: makeMesh(m), x: o.x, y: o.y + 0.3, z: o.z, vx: src.vx * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3, vz: src.vz * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3,
       vy: 3 + sp * 0.24 + Math.random() * 2, ax: dz, az: -dx, a: 0, av: 1.6 + sp * 0.17, t: 0, life: 5 + Math.random() * 2 });
@@ -1508,7 +1671,7 @@ function scenery(o, sp) {
   if (car.air > 2.5) return;
   const c = touch(o);
   if (!c) return;
-  if (k === 'bush') { if (sp > 2) knockDown(o, sp, true); return; }
+  if (k === 'bush' || k === 'plant') { if (sp > 2) knockDown(o, sp, true); return; }
   if (D.knock && sp >= D.knock) { knockDown(o, sp, false); return; }
   bonk(c);
 }
@@ -1531,9 +1694,14 @@ function landTricks() {
   airT = 0; car.flip = 0; car.yawAcc = 0;
 }
 let dustT = 0, biomeT = 0;
+// An island's flat top counts as ground for the truck while it is on one.
+function hAt(x, z) { const p = car.plat; return p && hyp(x - p.x, z - p.z) < p.r ? p.top : heightF(x, z); }
+function gAt(x, z) { const p = car.plat; return p && hyp(x - p.x, z - p.z) < p.r ? p.top : groundAt(x, z); }
 function updateCar(dt) {
   if (car.fly) { flyStep(dt); senseWorld(); return; }
   if (car.wing > 0) car.wing = Math.max(0, car.wing - dt * 4);      // wings fold away once back on the wheels
+  if (car.plat) { const p = car.plat; if (hyp(car.x - p.x, car.z - p.z) > p.r + 3 || car.y < p.top - 4) car.plat = null; }      // drove or fell off the island
+  else if (car.vy <= 0 && car.air > 3) for (const p of skyAct.islands) if (hyp(car.x - p.x, car.z - p.z) < p.r * 0.95 && car.y >= p.top - 0.6 && car.y <= p.top + 1.5) { car.plat = p; break; }      // dropped onto one
   const thr = (keys.up ? 1 : 0) - (keys.down ? 1 : 0), st = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
   car.steer += (st - car.steer) * Math.min(1, dt * 7);
   const b = car.biome, ctrl = car.air < 0.45, inWater = car.g < WATER - 0.05, pvF = car.vF;
@@ -1557,7 +1725,7 @@ function updateCar(dt) {
     if (keys.brake) { vF -= Math.sign(vF) * Math.min(Math.abs(vF), 22 * dt); grip = 1.3; }
     vL *= Math.exp(-grip * dt);
     car.vx = fx * vF + rx * vL; car.vz = fz * vF + rz * vL;
-    const gx = (heightF(car.x + 1, car.z) - heightF(car.x - 1, car.z)) / 2, gz = (heightF(car.x, car.z + 1) - heightF(car.x, car.z - 1)) / 2;
+    const gx = (hAt(car.x + 1, car.z) - hAt(car.x - 1, car.z)) / 2, gz = (hAt(car.x, car.z + 1) - hAt(car.x, car.z - 1)) / 2;
     if (thr === 0 && Math.hypot(car.vx, car.vz) < 1.6 && Math.hypot(gx, gz) < 0.6) { const k = Math.exp(-6 * dt); car.vx *= k; car.vz *= k; }
     else { car.vx -= gx * SLOPE * dt; car.vz -= gz * SLOPE * dt; }
   } else { const dh = car.steer * 1.8 * dt; car.h += dh; car.yawAcc += dh; if (car.air > 0.9 && keys.brake) car.flip += thr * 7.5 * dt; }
@@ -1581,10 +1749,10 @@ function updateCar(dt) {
     const wx = car.x + lx * fz + lz * fx, wz = car.z - lx * fx + lz * fz; let bu = 0;
     for (const o of bumps) { const d = Math.hypot(o.x - wx, o.z - wz); if (d < o.r + 0.9) bu = Math.max(bu, o.bh * (1 - smooth(o.r * 0.5, o.r + 0.9, d))); }
     if (bu > mbump) mbump = bu;
-    return groundAt(wx, wz) + bu;
+    return gAt(wx, wz) + bu;
   });
   const g = (wh[0] + wh[1] + wh[2] + wh[3]) / 4; car.g = g;
-  const hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4, dhs = hs - car.hs; car.hs = hs;
+  const hs = (hAt(car.x, car.z) * 2 + hAt(car.x + fx * 2, car.z + fz * 2) + hAt(car.x - fx * 2, car.z - fz * 2)) / 4, dhs = hs - car.hs; car.hs = hs;
   let slopeVy = clamp(dhs / dt, -40, 15); if (slopeVy > 0) slopeVy *= 1.12;
   const bvy = clamp((mbump - car.mb) / dt, 0, 16) * 0.5; car.mb = mbump;
   if (keys.hop && car.air < 0.25 && hopT <= 0) { car.pop = Math.max(car.pop, 10.5); hopT = 0.3; tone(300, 0, 0.12, 'sine', 0.06); }
@@ -1638,7 +1806,12 @@ function updateCar(dt) {
 }
 function senseWorld() {      // what the truck uncovers and picks up, however it is travelling
   reveal(car.x, car.z);
-  for (const l of landmarks) if (!l.found && Math.hypot(l.x - car.x, l.z - car.z) < (l.kind === 'city' ? l.pad - 12 : l.pad + 5)) {
+  for (const p of skyAct.islands) if (!p.got && Math.hypot(car.x - p.x, car.y - (p.top + 2.2), car.z - p.z) < 4.6) {      // the crystal on an island
+    p.got = true; gotCrystals.add(p.id); netSend({ t: 'cx', id: p.id }); doSave();
+    popText('SKY CRYSTAL · ' + gotCrystals.size); [784, 988, 1319, 1568].forEach((f, k) => tone(f, k * 0.07, 0.4, 'sine', 0.07));
+    for (let k = 0; k < 14; k++) puff(p.x + (Math.random() - .5) * 3, p.top + 2 + Math.random() * 2, p.z + (Math.random() - .5) * 3, [.4, 1, .95], 0.3, 3, 0.9);
+  }
+  for (const l of landmarks) if (!l.found && Math.hypot(l.x - car.x, l.z - car.z) < (l.pad > 50 ? l.pad - 12 : l.pad + 5)) {
     const fresh = ![...foundSites.values()].includes(l.def.id);
     l.found = true; foundSites.set(l.id, l.def.id); sfxFound(); doSave(); netSend({ t: 'fd', id: l.id, k: l.def.id });
     if (l.kind === 'city') toast('CITY REACHED', l.name, l.def.lore, 6.5);
@@ -1663,6 +1836,116 @@ function toggleFly() {
   } else car.fp = clamp(Math.atan2(car.vy, sp + 1), -0.6, 0.5);
   if (hook && hook.phase === 'pull') releaseHook();
   popText('WINGS OUT'); [392, 523, 659, 784].forEach((f, i) => tone(f, i * 0.06, 0.35, 'sine', 0.07));
+}
+function ringPass(r, now) {      // through a ring: a shove forward, and a bigger one for finishing the trail
+  r.t = now + 30; skyStats.rings++;
+  const done = r.trail.filter(q => q.t > now).length, all = done === r.trail.length, sp = Math.hypot(car.vx, car.vy, car.vz) || 1, f = (sp + (all ? 16 : 7)) / sp;
+  car.vx *= f; car.vy *= f; car.vz *= f;
+  if (all) { skyStats.trails++; popText('SKY TRAIL COMPLETE'); [523, 659, 784, 1047, 1319].forEach((q, k) => tone(q, k * 0.08, 0.45, 'sine', 0.08)); }
+  else { popText('RING ' + done + ' / ' + r.trail.length); tone(440 * Math.pow(2, done / 6), 0, 0.3, 'sine', 0.08); }
+  for (let k = 0; k < 12; k++) puff(r.x + (Math.random() - .5) * 8, r.y + (Math.random() - .5) * 8, r.z + (Math.random() - .5) * 8, [1, .85, .3], 0.3, 1, 0.9);
+}
+function skyFlight(dt) {      // what the sky does to a flying truck; true if it ended the flight
+  const now = Date.now() / 1000;
+  for (const th of skyAct.thermals) {       // rising air lifts it
+    const d = hyp(car.x - th.x, car.z - th.z);
+    if (d < th.r && car.y < th.top) { car.y += (4 + 8 * (1 - d / th.r)) * dt; if (now > thermalT) { popText('THERMAL'); tone(392, 0, 0.5, 'sine', 0.05); tone(587, 0.15, 0.5, 'sine', 0.05); } thermalT = now + 5; }
+  }
+  for (const r of skyAct.rings) {       // crossing a ring's plane inside its rim
+    const dx = car.x - r.x, dy = car.y + 1.5 - r.y, dz = car.z - r.z;
+    if (Math.abs(dx) > 30 || Math.abs(dz) > 30) { r.side = 0; continue; }
+    const sd = dx * Math.sin(r.yaw) + dz * Math.cos(r.yaw), side = sd >= 0 ? 1 : -1;
+    if (r.side && side !== r.side && now > r.t && dx * dx + dy * dy + dz * dz - sd * sd < 30) ringPass(r, now);
+    r.side = side;
+  }
+  for (const b of skyAct.balloons) if (now > b.dead) {       // balloons pop
+    const [bx, by, bz] = balloonPos(b, now);
+    if (Math.hypot(car.x - bx, car.y + 1 - (by + 6.5), car.z - bz) < 5.8) {
+      b.dead = now + 75; skyStats.balloons++; popText('POP!'); tone(900, 0, 0.06, 'square', 0.08); tone(300, 0.03, 0.12, 'sawtooth', 0.06);
+      for (let k = 0; k < 26; k++) puff(bx + (Math.random() - .5) * 6, by + 4 + Math.random() * 6, bz + (Math.random() - .5) * 6, [[.95, .3, .3], [.98, .85, .3], [.4, .9, .7], [.6, .35, .9]][k % 4], 0.35, 2, 0.8);
+    }
+  }
+  for (const p of skyAct.islands) {       // islands: land on the top, or hit the side
+    const d = hyp(car.x - p.x, car.z - p.z);
+    if (d > p.r + 1.5) continue;
+    if (d < p.r * 0.95 && car.vy <= 0 && car.y <= p.top + 0.35 && car.y > p.top - 1.6) { car.fly = false; car.plat = p; car.y = p.top; popText('ISLAND LANDING'); tone(659, 0, 0.2, 'sine', 0.06); tone(880, 0.1, 0.3, 'sine', 0.06); return true; }
+    if (car.y < p.top - 0.4 && car.y > p.top - p.r * 1.15) {
+      const nx = car.x - p.x, nz = car.z - p.z, nl = Math.hypot(nx, nz) || 1;
+      car.x += nx / nl * 1.5; car.z += nz / nl * 1.5; car.vx = nx / nl * 7; car.vz = nz / nl * 7; car.vy = Math.min(car.vy, 2);
+      car.fly = false; shake = Math.max(shake, 0.6); sfxThump(); sfxCrunch(); popText('CRUNCH');
+      return true;
+    }
+  }
+  for (const o of skyAct.blimps) {       // a blimp is a long way round
+    const [bx, by, bz, yaw] = orbitPos(o, now, 0.012), dx = car.x - bx, dz = car.z - bz, along = clamp(dx * Math.sin(yaw) + dz * Math.cos(yaw), -17, 17);
+    if (Math.hypot(dx - Math.sin(yaw) * along, car.y + 1 - by, dz - Math.cos(yaw) * along) < 5) {
+      const nl = Math.hypot(dx, dz) || 1; car.vx = dx / nl * 8; car.vz = dz / nl * 8; car.vy = -2; car.fly = false; shake = Math.max(shake, 0.6); sfxThump(); popText('BOINK'); return true;
+    }
+  }
+  for (const o of skyAct.drones) { const [bx, by, bz] = orbitPos(o, now, 0.03); if (Math.hypot(car.x - bx, car.y + 1 - by, car.z - bz) < 5) { car.vy = -3; car.fly = false; shake = Math.max(shake, 0.6); sfxThump(); sfxCrunch(); popText('CRUNCH'); return true; } }
+  return false;
+}
+function fireRocket(o, now) {      // the drone looses one at the ground: at the truck if it can see one, otherwise at nothing much
+  const [bx, by, bz] = orbitPos(o, now, 0.03), d = hyp(car.x - bx, car.z - bz);
+  let tx, tz, atYou = d < 240 && state === 'play';
+  if (atYou) { const lead = Math.hypot(d, by - car.y) / 58 * 0.7; tx = car.x + car.vx * lead; tz = car.z + car.vz * lead; }
+  else { const a = Math.random() * 6.2832, rr = Math.random() * 70; tx = bx + Math.cos(a) * rr; tz = bz + Math.sin(a) * rr; }
+  const ty = Math.max(groundAt(tx, tz), WATER), l = Math.hypot(tx - bx, ty - by, tz - bz) || 1;
+  rockets.push({ x: bx, y: by - 1, z: bz, vx: (tx - bx) / l * 58, vy: (ty - by) / l * 58, vz: (tz - bz) / l * 58, tx, ty, tz, t: 0 });
+  const vol = clamp(1 - d / 300, 0.1, 1);
+  tone(220, 0, 0.5, 'sawtooth', 0.06 * vol);
+  if (atYou) { popText('INCOMING!'); [880, 880, 880].forEach((f, i) => tone(f, i * 0.16, 0.1, 'square', 0.06)); }
+}
+function rocketBlast(r) {      // a proper bang: it flattens what is standing there and throws the truck
+  const d = Math.hypot(r.x - car.x, r.y - car.y, r.z - car.z), vol = clamp(1 - d / 200, 0.12, 1);
+  blasts.push({ x: r.x, y: r.y, z: r.z, t: 0, col: [1, .55, .15] });
+  for (let i = 0; i < 40; i++) { const a = Math.random() * 6.2832, sp = 3 + Math.random() * 13; parts.push({ x: r.x, y: r.y + 0.5, z: r.z, vx: Math.cos(a) * sp, vy: 4 + Math.random() * 13, vz: Math.sin(a) * sp, life: 0.8 + Math.random() * 0.8, t: 0, size: 0.3 + Math.random() * 0.4, col: i % 3 ? [1, .6, .15] : [.3, .3, .32], em: i % 3 ? 0.8 : 0.1 }); }
+  if (parts.length > 260) parts.splice(0, parts.length - 260);
+  tone(55, 0, 0.6, 'sawtooth', 0.14 * vol); tone(82, 0, 0.35, 'square', 0.09 * vol);
+  shake = Math.max(shake, clamp(1 - d / 70, 0, 1) * 0.9);
+  const ccx = Math.floor(r.x / CH), ccz = Math.floor(r.z / CH);
+  for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
+    const c = chunks.get(ckey(ccx + cx, ccz + cz));
+    if (c) for (const o of c.obs) {
+      const D = DECO[o.kind];
+      if (o.dead || !D || !(D.knock || o.kind === 'bush' || o.kind === 'plant')) continue;
+      const ox = o.x - r.x, oz = o.z - r.z, od = Math.hypot(ox, oz);
+      if (od < 8.5) knockDown(o, 20, !D.knock, { vx: ox / (od || 1) * 20, vz: oz / (od || 1) * 20 });
+    }
+  }
+  if (d < 11) {       // too close
+    const k = 1 - d / 11, nx = (car.x - r.x) / (d || 1), nz = (car.z - r.z) / (d || 1);
+    car.vx += nx * 20 * k; car.vz += nz * 20 * k; car.pop = Math.max(car.pop, 12 * k); car.rv += (Math.random() - .5) * 10 * k;
+    if (car.fly) { car.fly = false; car.vy = 6 * k; }
+    popText(k > 0.45 ? 'DIRECT HIT' : 'TOO CLOSE');
+  }
+  if (!guestMode()) for (const n of npcs) if (n.alive && n.type !== 'rival' && hyp(n.x - r.x, n.z - r.z) < 8.5 && Math.abs(n.y - r.y) < 8) {      // it is no friend of theirs either
+    const ox = n.x - r.x, oz = n.z - r.z, od = Math.hypot(ox, oz) || 1;
+    tumble(n, ox / od, oz / od, { vx: ox / od * 12, vz: oz / od * 12 }); netSend({ t: 'fx', id: n.id, nx: ox / od, nz: oz / od }); n.alive = false; n.wait = n.type === 'thief' ? 5 : 10;
+  }
+}
+function skyThreats(dt) {
+  const now = Date.now() / 1000;
+  for (const o of skyAct.drones) {
+    if (!o.next) o.next = now + 8 + Math.random() * 14;
+    else if (now > o.next) { o.next = now + 16 + Math.random() * 18; const [bx, , bz] = orbitPos(o, now, 0.03); if (hyp(bx - car.x, bz - car.z) < 420) fireRocket(o, now); }
+  }
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i]; r.t += dt; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt;
+    if (Math.random() < dt * 50) parts.push({ x: r.x, y: r.y, z: r.z, vx: 0, vy: 0.5, vz: 0, life: 0.6, t: 0, size: 0.3, col: Math.random() < 0.5 ? [1, .6, .15] : [.75, .75, .78], em: 0.7 });
+    if (r.y <= r.ty + 0.4 || r.y <= groundAt(r.x, r.z) || r.t > 8) { rockets.splice(i, 1); rocketBlast(r); }
+  }
+}
+function skyTick(dt) {      // motes spiralling up the thermals, so they can be seen; and sparkles off anyone yassified
+  for (const n of npcs) if (n.alive && n.glam > 0 && Math.random() < 0.5) parts.push({ x: n.x + (Math.random() - .5) * 3, y: n.y + 1 + Math.random() * 2.5, z: n.z + (Math.random() - .5) * 3, vx: 0, vy: 2.5, vz: 0, life: 0.6, t: 0, size: 0.22, col: GLIT[Math.floor(Math.random() * GLIT.length)], em: 0.9 });
+  skyPuffT -= dt;
+  if (skyPuffT > 0) return;
+  skyPuffT = 0.05;
+  for (const th of skyAct.thermals) if (hyp(th.x - car.x, th.z - car.z) < 320) {
+    const a = Math.random() * 6.2832, rr = Math.random() * th.r;
+    parts.push({ x: th.x + Math.cos(a) * rr, y: th.base + Math.random() * 115, z: th.z + Math.sin(a) * rr, vx: -Math.sin(a) * 2, vy: 7, vz: Math.cos(a) * 2, life: 1.3, t: 0, size: 0.3, col: [1, .96, .8], em: 0.7 });
+  }
+  if (parts.length > 260) parts.splice(0, parts.length - 260);
 }
 let trailT = 0;
 function flyStep(dt) {
@@ -1689,6 +1972,7 @@ function flyStep(dt) {
   car.vx = dx * V; car.vy = dy * V; car.vz = dz * V;
   car.x += car.vx * dt; car.y += car.vy * dt; car.z += car.vz * dt;
   odo += Math.hypot(car.x - px, car.z - pz);
+  if (skyFlight(dt)) return;
   // the look of it: body follows the flight, springs settle, wheels idle
   car.pitch = car.gp = car.fp; car.roll = car.gr = -car.fb; car.sy += (0 - car.sy) * Math.min(1, dt * 6); car.sv = car.pv = car.rv = 0;
   car.vF = V; car.spin += 6 * dt;
@@ -1721,7 +2005,7 @@ function flyStep(dt) {
   if (trailT <= 0 && V > 14) {
     trailT = 0.03;
     for (const sgn of [1, -1]) { const lx = sgn * 5.2 * Math.cos(car.fb), ly = 2.1 - sgn * 5.2 * Math.sin(car.fb); parts.push({ x: car.x + fz * lx - fx * 0.4, y: car.y + ly, z: car.z - fx * lx - fz * 0.4, vx: 0, vy: 0.3, vz: 0, life: 0.55, t: 0, size: 0.16, col: [1, 1, 1], em: 0.7 }); }
-    if (parts.length > 170) parts.splice(0, parts.length - 170);
+    if (parts.length > 260) parts.splice(0, parts.length - 260);
   }
 }
 
@@ -1770,7 +2054,7 @@ function spawnNpc(n) {
 function initNpc(n, x, z, h) {
   n.x = x; n.z = z; n.y = groundAt(x, z); n.hs = heightF(x, z); n.h = n.wander = h;
   n.v = n.vx = n.vz = n.vy = n.pitch = n.roll = n.spin = n.stun = n.slowT = n.jink = n.jinkT = n.bumpT = 0;
-  n.alive = true; n.hooked = false; n.hookSlow = 0; n.prey = null; n.who = 0;
+  n.alive = true; n.hooked = false; n.hookSlow = 0; n.prey = null; n.who = 0; n.glam = 0;
   n.mode = 'patrol'; n.sees = false; n.seeT = Math.random() * 0.15; n.lostT = n.chaseT = n.searchT = n.patrolT = 0; n.tired = false; n.px = n.lx = x; n.pz = n.lz = z;
 }
 const inCover = () => car.biome === FOREST && Math.hypot(car.vx, car.vz) < 9;     // sitting still or creeping among the trees
@@ -1788,9 +2072,10 @@ function npcEvent(e, m) {      // something a thief or hunter did to this player
   else if (e === 'tiring') popText('HUNTER IS TIRING');
   else if (e === 'lost') { shaken++; popText('HUNTER LOST YOU'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); }
   else if (e === 'caught') {
-    caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
+    caught++; popText(m.bomb ? 'THIEF YASSIFIED' : 'THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
     if (hook && hook.npc && hook.npc !== remote) { hook.npc = null; hook.phase = 'back'; }
-  } else if (e === 'wrecked') { wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4); car.vx *= 0.75; car.vz *= 0.75; }
+  } else if (e === 'wrecked' && m.bomb) { wrecked++; popText('HUNTER YASSIFIED'); [1047, 1319, 1568].forEach((f, i) => tone(f, i * 0.07, 0.35, 'sine', 0.07)); }
+  else if (e === 'wrecked') { wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4); car.vx *= 0.75; car.vz *= 0.75; }
   else if (e === 'rammed') {
     rammed++; popText('RAMMED!'); sfxThump(); shake = Math.max(shake, 0.5);
     car.vx += m.ix; car.vz += m.iz; car.pop = Math.max(car.pop, 7); car.rv += (Math.random() - .5) * 6;
@@ -1827,6 +2112,11 @@ function updateNpcs(dt) {
   const two = NET.host && remote.alive;
   for (const n of npcs) {
     if (!n.alive) { n.wait -= dt; if (n.wait <= 0) spawnNpc(n); continue; }
+    if (n.glam > 0) {      // yassified: it twirls on the spot, sparkling, and forgets what it was doing
+      n.glam -= dt; n.h += dt * 6; n.v = n.vx = n.vz = 0; n.mode = 'patrol'; n.prey = null; n.hooked = false; n.y += (groundAt(n.x, n.z) - n.y) * Math.min(1, dt * 8);
+      if (n.glam <= 0) { n.alive = false; n.wait = n.type === 'thief' ? 5 : 10; }
+      continue;
+    }
     const thief = n.type === 'thief', rival = n.type === 'rival';
     if (n.hooked === remote && !two) n.hooked = false;
     if (n.prey === remote && !two) n.prey = null;
@@ -1913,7 +2203,7 @@ function updateNpcs(dt) {
         const ox = n.x - o.x, oz = n.z - o.z, od = Math.hypot(ox, oz), m = o.r + 1.2;
         if (od >= m || od < 1e-4) continue;
         if (o.kind === 'shroom') { if (n.y - groundAt(n.x, n.z) < 0.5) n.vy = 15; }
-        else if (o.kind === 'bush') knockDown(o, n.v, true, n);
+        else if (o.kind === 'bush' || o.kind === 'plant') knockDown(o, n.v, true, n);
         else if (DECO[o.kind].knock) { if (Math.abs(n.v) > 4) knockDown(o, n.v, false, n); }
         else if (o.kind === 'boulder') { n.x += ox / od * (m - od); n.z += oz / od * (m - od); n.v *= 0.9; }
       }
@@ -1969,6 +2259,7 @@ function hookSnags(x, y, z) {     // does the flying hook bite into scenery here
     }
   }
   for (const o of lmObs) if (y < o.y + 12 && Math.hypot(o.x - x, o.z - z) < o.r) return true;
+  for (const p of skyAct.islands) if (y < p.top + 0.3 && y > p.top - p.r && hyp(p.x - x, p.z - z) < p.r) return true;      // an island will take a hook too
   return false;
 }
 function fireHook() {
@@ -2044,6 +2335,62 @@ function updateHook(dt) {
 canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button === 0) fireHook(); });
 $('tHook').addEventListener('pointerdown', e => { e.preventDefault(); fireHook(); });
 $('tWing').addEventListener('pointerdown', e => { e.preventDefault(); toggleFly(); });
+
+// ───────────────────────── glitter bombs ─────────────────────────
+const SLAY = ['SLAY!', 'YASSIFIED', 'GIRLYPOP', 'ICONIC', 'SERVED', 'PERIODT'];
+const bombMesh = (() => { const m = new MB(); m.lo = 1; m.box(-.32, -.32, -.6, .32, .32, .55, [1, .45, .78]); m.box(-.2, -.2, .55, .2, .2, .85, [1, .85, .3]); m.box(-.34, -.34, -.1, .34, .34, .08, [1, 1, 1]); m.box(-.5, -.06, -.95, .5, .06, -.55, [.85, .55, 1]); m.box(-.06, -.5, -.95, .06, .5, -.55, [.85, .55, 1]); return makeMesh(m); })();
+function glamAt(x, z) { for (const q of glamZones) if (hyp(x - q[0], z - q[1]) < q[2]) return true; return false; }
+function addGlam(x, z, r) {      // remember the patch, and repaint the chunks it reaches
+  if (glamZones.some(q => hyp(q[0] - x, q[1] - z) < 2)) return;
+  glamZones.push([Math.round(x), Math.round(z), r]);
+  if (glamZones.length > 300) glamZones.shift();
+  for (let cz = Math.floor((z - r - 2) / CH); cz <= Math.floor((z + r + 2) / CH); cz++) for (let cx = Math.floor((x - r - 2) / CH); cx <= Math.floor((x + r + 2) / CH); cx++) dirty.add(ckey(cx, cz));
+}
+function dropBomb() {
+  if (state !== 'play') return;
+  if (!car.fly) { popText('BOMBS NEED WINGS · PRESS B'); return; }
+  if (bombAmmo <= 0) { tone(140, 0, 0.08, 'square', 0.04); return; }
+  bombAmmo--;
+  const b = { x: car.x, y: car.y + 0.3, z: car.z, vx: car.vx * 0.9, vy: Math.min(car.vy, 0) - 3, vz: car.vz * 0.9, t: 0, mine: true };
+  bombs.push(b);
+  netSend({ t: 'bm', p: [b.x, b.y, b.z, b.vx, b.vy, b.vz].map(v => Math.round(v * 100) / 100) });
+  if (AC && !muted) { const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.type = 'sine'; o.frequency.setValueAtTime(1500, t); o.frequency.exponentialRampToValueAtTime(420, t + 1.1); g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + 1.25); }
+}
+function explodeGlitter(b, wet) {      // not a bang so much as a makeover
+  const d = Math.hypot(b.x - car.x, b.y - car.y, b.z - car.z), vol = clamp(1 - d / 170, 0.15, 1);
+  blasts.push({ x: b.x, y: b.y, z: b.z, t: 0 });
+  for (let i = 0; i < 48; i++) { const a = Math.random() * 6.2832, sp = 3 + Math.random() * 14; parts.push({ x: b.x, y: b.y + 0.5, z: b.z, vx: Math.cos(a) * sp, vy: 5 + Math.random() * 14, vz: Math.sin(a) * sp, life: 1 + Math.random() * 0.9, t: 0, size: 0.28 + Math.random() * 0.3, col: GLIT[i % GLIT.length], em: 0.85 }); }
+  if (parts.length > 260) parts.splice(0, parts.length - 260);
+  [1047, 1319, 1568, 2093, 2637].forEach((f, i) => tone(f, i * 0.05, 0.5, 'sine', 0.07 * vol)); tone(90, 0, 0.35, 'sawtooth', 0.08 * vol);
+  shake = Math.max(shake, clamp(1 - d / 60, 0, 1) * 0.6);
+  if (!wet) addGlam(b.x, b.z, 13);
+  if (b.mine) popText(SLAY[Math.floor(Math.random() * SLAY.length)]);
+  if (d < 12 && !car.fly) { car.pop = Math.max(car.pop, 5); car.rv += (Math.random() - .5) * 5; if (!b.mine) popText('YOU GOT GLITTERED'); }
+  if (guestMode()) return;      // the host decides who was standing in it
+  for (const n of npcs) if (n.alive && !(n.glam > 0) && hyp(n.x - b.x, n.z - b.z) < 12 && Math.abs(n.y - b.y) < 9) {
+    if (n.type === 'rival') { n.hookSlow = 3.5; n.v = 0; popText('THIEF YASSIFIED'); continue; }
+    n.glam = 7; tell(b.mine ? car : remote, n.type === 'thief' ? 'caught' : 'wrecked', { bomb: 1 });
+  }
+}
+function updateBombs(dt) {
+  if (bombAmmo < 3) { bombT += dt; if (bombT >= 5) { bombT = 0; bombAmmo++; } }      // one back every five seconds
+  for (let i = bombs.length - 1; i >= 0; i--) {
+    const b = bombs[i]; b.t += dt; b.vy -= 26 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+    if (Math.random() < dt * 40) parts.push({ x: b.x, y: b.y, z: b.z, vx: 0, vy: 1, vz: 0, life: 0.5, t: 0, size: 0.2, col: GLIT[Math.floor(Math.random() * GLIT.length)], em: 0.9 });
+    const g = groundAt(b.x, b.z);
+    let hit = b.y <= Math.max(g, WATER);
+    if (!hit) {      // rooftops and islands count too
+      const ccx = Math.floor(b.x / CH), ccz = Math.floor(b.z / CH);
+      for (let cz = -1; cz <= 1 && !hit; cz++) for (let cx = -1; cx <= 1 && !hit; cx++) { const c = chunks.get(ckey(ccx + cx, ccz + cz)); if (c) for (const o of c.obs) if (o.kind === 'bldg' && b.y <= o.top && b.x > o.x0 && b.x < o.x1 && b.z > o.z0 && b.z < o.z1) { hit = true; break; } }
+      for (const p of skyAct.islands) if (b.y <= p.top && b.y > p.top - p.r && hyp(b.x - p.x, b.z - p.z) < p.r) hit = true;
+    }
+    if (hit || b.t > 14) { bombs.splice(i, 1); if (hit) explodeGlitter(b, g < WATER && b.y <= WATER); }
+  }
+  for (let i = blasts.length - 1; i >= 0; i--) { blasts[i].t += dt; if (blasts[i].t > 0.4) blasts.splice(i, 1); }
+  skyThreats(dt);
+}
+addEventListener('contextmenu', e => { if (state === 'play') { e.preventDefault(); dropBomb(); } });
+$('tBomb').addEventListener('pointerdown', e => { e.preventDefault(); dropBomb(); });
 
 // ───────────────────────── race mode ─────────────────────────
 function relocate(n) {     // the rival got stuck or swamped: winch it to dry land nearby, pointed at the waypoint
@@ -2151,7 +2498,7 @@ function netChannel(dc) {
   dc.onopen = () => {
     NET.lastRx = performance.now(); NET.status = 'Connected'; NET.fell = [...felled].slice(-4000);
     if (!NET.host) npcs.length = 0;      // the guest hands over to the host's thieves and hunters
-    netSend({ t: 'hi', seed: SEED, v: 2, found: [...foundSites], crates: [...gotCrates], o: NET.host ? { thieves: opts.thieves, hunters: opts.hunters } : null });
+    netSend({ t: 'hi', seed: SEED, v: 2, found: [...foundSites], crates: [...gotCrates], crystals: [...gotCrystals], glam: glamZones.slice(-150), o: NET.host ? { thieves: opts.thieves, hunters: opts.hunters } : null });
     toast('FRIEND CONNECTED', 'You share this world', 'Same waypoint, same thieves and hunters, and a find counts for both of you. Press 3 to race.', 6); [523, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.3));
   };
   dc.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } netRecv(m); };
@@ -2188,7 +2535,7 @@ function mirrorNpcs(list) {      // the guest's copy of the host's thieves and h
   for (const a of list) {
     let n = old.get(a[0]);
     if (n) old.delete(a[0]); else n = { id: a[0], x: a[2], y: a[3], z: a[4], h: a[5], pitch: a[6], roll: a[7], spin: 0, alive: true, hooked: false, stun: 0 };
-    n.type = a[1] ? 'hunter' : 'thief'; n.t = a; n.mode = MODES[a[8]]; n.who = a[9]; n.tired = !!a[10]; n.v = a[11]; n.vx = Math.sin(a[5]) * a[11]; n.vz = Math.cos(a[5]) * a[11];
+    n.type = a[1] ? 'hunter' : 'thief'; n.t = a; n.mode = MODES[a[8]]; n.who = a[9]; n.tired = !!a[10]; n.v = a[11]; n.glam = a[12] ? 1 : 0; n.vx = Math.sin(a[5]) * a[11]; n.vz = Math.cos(a[5]) * a[11];
     npcs.push(n);
   }
   for (const n of old.values()) n.alive = false;      // anything it no longer lists is gone
@@ -2208,6 +2555,8 @@ function netRecv(m) {
     else if (m.seed !== SEED) toast('DIFFERENT WORLDS', 'Open the same invite link', 'Your friend is in another world. Both of you need the same link.', 9);
     for (const [id, kind] of m.found || []) foundSites.set(id, kind);      // what either of you has found or picked up counts for both
     for (const id of m.crates || []) gotCrates.add(id);
+    for (const id of m.crystals || []) gotCrystals.add(id);
+    for (const q of m.glam || []) addGlam(q[0], q[1], q[2]);
     if (m.o && !NET.host) { setOpt('thieves', m.o.thieves, true); setOpt('hunters', m.o.hunters, true); }
     refreshActive(true); pickTarget(); updateHud(); checkWin();
   } else if (m.t === 'fd') {      // the friend found a place
@@ -2216,7 +2565,9 @@ function netRecv(m) {
     const d = KINDS.find(d => d.id === m.k);
     toast('YOUR FRIEND FOUND A PLACE', d ? d.name : 'Somewhere new', 'It counts for both of you.', 4.5); tone(784, 0, 0.2); tone(1047, 0.12, 0.3);
     checkWin();
-  } else if (m.t === 'cr') { gotCrates.add(m.id); for (const c of crates) if (c.id === m.id) c.got = true; }
+  } else if (m.t === 'bm') bombs.push({ x: m.p[0], y: m.p[1], z: m.p[2], vx: m.p[3], vy: m.p[4], vz: m.p[5], t: 0, mine: false });      // the friend dropped one: it falls and lands the same here
+  else if (m.t === 'cx') { gotCrystals.add(m.id); for (const p of skyAct.islands) if (p.id === m.id) p.got = true; }
+  else if (m.t === 'cr') { gotCrates.add(m.id); for (const c of crates) if (c.id === m.id) c.got = true; }
   else if (m.t === 'tg') {      // the friend switched waypoint
     const [rx, rz] = String(m.id).split(',').map(Number), st = siteOf(rx, rz);
     if (st && st.def) { st.found = foundSites.has(st.id); pinned = target = st; toast('WAYPOINT', whereText(st), 'Your friend picked a new one for you both.', 3.5); }
@@ -2252,7 +2603,7 @@ function netPump() {      // runs on a timer, not the frame loop, so a player wh
     c: inCover() ? 1 : 0 };
   if (NET.host) {      // the host's clock sets the time of day for both, and its thieves and hunters are the ones both players see
     m.d = Math.round(tod * 1e4) / 1e4;
-    m.n = npcs.filter(n => n.alive && n.type !== 'rival').map(n => [n.id, n.type === 'hunter' ? 1 : 0, r(n.x), r(n.y), r(n.z), r(n.h), r(n.pitch), r(n.roll), n.mode === 'chase' ? 1 : n.mode === 'search' ? 2 : 0, n.who | 0, n.tired ? 1 : 0, r(n.v)]);
+    m.n = npcs.filter(n => n.alive && n.type !== 'rival').map(n => [n.id, n.type === 'hunter' ? 1 : 0, r(n.x), r(n.y), r(n.z), r(n.h), r(n.pitch), r(n.roll), n.mode === 'chase' ? 1 : n.mode === 'search' ? 2 : 0, n.who | 0, n.tired ? 1 : 0, r(n.v), n.glam > 0 ? 1 : 0]);
   }
   if (NET.fell.length) { m.f = NET.fell; NET.fell = []; }
   netSend(m);
@@ -2398,11 +2749,26 @@ function render(time) {
   for (const n of npcs) {
     if (!n.alive || Math.hypot(n.x - cam.eye[0], n.z - cam.eye[2]) > maxD) continue;
     const thief = n.type !== 'hunter', nm = mulN(T(n.x, n.y, n.z), RY(n.h), RX(-n.pitch), RZ(n.roll)), ws = thief ? 0.8 : 1;
-    draw(thief ? npcMesh.thief : npcMesh.hunter, nm);
+    draw(thief ? npcMesh.thief : npcMesh.hunter, nm, n.glam > 0 ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined);
     if (!thief) draw(Math.floor(time * 6) % 2 ? npcMesh.lightR : npcMesh.lightB, nm, { emis: 1 });
     draw(thief ? npcMesh.headT : npcMesh.headH, nm, { emis: 1 });
     for (const [lx, lz] of thief ? TWHEELS : WHEELS) draw(carMesh.wheel, mulN(nm, T(lx, 0.6 * ws, lz), RX(n.spin), Sc(ws, ws, ws)));
     if (Math.hypot(n.x - car.x, n.z - car.z) > 18) draw(cubeMesh, mulN(T(n.x, n.y + (thief ? 5.2 : 5.6) + Math.sin(time * 4) * 0.3, n.z), RY(time * 2), RZ(0.785), RX(0.785), Sc(.55, .55, .55)), { emis: 1, tint: n.type === 'rival' ? [1, .35, .85] : thief ? [1, .85, .2] : [1, .2, .15] });
+  }
+  for (const b of bombs) draw(bombMesh, mulN(T(b.x, b.y, b.z), RY(Math.atan2(b.vx, b.vz)), RX(Math.atan2(-b.vy, hyp(b.vx, b.vz) + 0.01))), { emis: 0.35 });
+  // the sky: seen from a long way off
+  {
+    const SKYFOG = [330, 580], now = Date.now() / 1000, far = (x, z) => Math.hypot(x - cam.eye[0], z - cam.eye[2]) > 600;
+    for (const p of skyAct.islands) {
+      if (far(p.x, p.z)) continue;
+      draw(islandMesh[p.v], T(p.x, p.top, p.z), { fog: SKYFOG });
+      if (!p.got) draw(cubeMesh, mulN(T(p.x, p.top + 3.2 + Math.sin(time * 2.4) * 0.35, p.z), RY(time * 1.5), RZ(0.785), RX(0.785), Sc(1.1, 1.1, 1.1)), { emis: 1, tint: [.4, 1, .95], fog: SKYFOG });
+    }
+    for (const r of skyAct.rings) if (!far(r.x, r.z)) { const on = now > r.t; draw(ringMesh, mul(T(r.x, r.y, r.z), RY(r.yaw)), { emis: on ? 0.8 : 0.1, tint: on ? [1, 1, 1] : [.45, .45, .5], fog: SKYFOG }); }
+    for (const b of skyAct.balloons) if (now > b.dead) { const [bx, by, bz] = balloonPos(b, now); if (!far(bx, bz)) draw(balloonMesh[b.v], T(bx, by, bz), { fog: SKYFOG }); }
+    for (const o of skyAct.blimps) { const [bx, by, bz, yaw] = orbitPos(o, now, 0.012); if (!far(bx, bz)) draw(blimpMesh, mul(T(bx, by, bz), RY(yaw)), { fog: SKYFOG }); }
+    for (const o of skyAct.drones) { const [bx, by, bz, yaw] = orbitPos(o, now, 0.03); if (!far(bx, bz)) draw(droneMesh, mulN(T(bx, by, bz), RY(yaw), RZ(-0.3), Sc(1.3, 1.3, 1.3)), { fog: SKYFOG }); }
+    for (const r of rockets) draw(rocketMesh, mulN(T(r.x, r.y, r.z), RY(Math.atan2(r.vx, r.vz)), RX(Math.atan2(-r.vy, hyp(r.vx, r.vz) + 0.01)), Sc(1.5, 1.5, 1.5)), { emis: 0.3 });
   }
   // parcels
   crates.forEach((c, i) => {
@@ -2421,6 +2787,9 @@ function render(time) {
   for (const c of vis) if (c.water) { gl.bindVertexArray(c.water.vao); gl.drawElements(gl.TRIANGLES, c.water.count, gl.UNSIGNED_INT, 0); }
   gl.blendFunc(gl.ONE, gl.ONE);
   const pulse = 0.5 + 0.12 * Math.sin(time * 2.2);
+  for (const q of blasts) { const k = 1 - q.t / 0.4, sz = 3 + q.t * 60; draw(cubeMesh, mulN(T(q.x, q.y + 1, q.z), RY(time * 3), Sc(sz, sz * 0.55, sz)), { emis: 1, fogMode: 1, fog: [330, 580], tint: (q.col || [1, .35, .75]).map(v => v * k) }); }      // the flash
+  for (const r of rockets) draw(beamMesh, mul(T(r.tx, r.ty, r.tz), Sc(1.6, 0.5, 1.6)), { emis: 1, fogMode: 1, fog: [330, 580], tint: [.9, .1, .08] });      // a red marker where a rocket is coming down
+  for (const th of skyAct.thermals) if (Math.hypot(th.x - cam.eye[0], th.z - cam.eye[2]) < 520) draw(beamMesh, mul(T(th.x, th.base, th.z), Sc(th.r * 1.1, 1.45, th.r * 1.1)), { emis: 1, fogMode: 1, fog: [330, 580], tint: [.085, .075, .045] });      // a faint shimmer where the air rises
   if (remote.alive) draw(beamMesh, mul(T(remote.x, remote.y + 2.6, remote.z), Sc(0.5, 0.5, 0.5)), { emis: 1, fogMode: 1, fog: [500, 1100], tint: [.12, .4, .9] });      // a blue light over your friend, to find them by
   const night = 1 - sk.day;
   if (night > 0.05) for (const n of remote.alive ? [...npcs, remote] : npcs) if (n.alive) {      // headlights after dark: a beam on the ground ahead, and a glare you can pick out from across the island
@@ -2468,7 +2837,7 @@ function tick(dt, now, drawIt = true) {
     updateCar(dt / 2); updateCar(dt / 2);
     playTime += dt; tod = (tod + dt / 540) % 1;
     saveT -= dt; if (saveT <= 0) { saveT = 5; doSave(); }
-    updateNpcs(dt); updateRace(dt);
+    updateNpcs(dt); updateRace(dt); skyTick(dt); updateBombs(dt);
     if (dirty.size) {     // re-mesh chunks that just lost a tree
       for (const k of dirty) { const c = chunks.get(k); if (c) { freeMesh(c.mesh); freeMesh(c.water); chunks.set(k, buildChunk(c.cx, c.cz)); } }
       dirty.clear();
@@ -2506,7 +2875,7 @@ requestAnimationFrame(frame);
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the world…', '', 60); });
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
-window.__game = { car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+window.__game = { car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
 })();
 </script>
 </body>

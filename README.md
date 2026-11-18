@@ -22,6 +22,7 @@ Then go to `http://localhost:8090`.
 | Space | Handbrake (drift) |
 | Shift | Boost |
 | B | Wings: glide and fly. S pulls up, W dives, A / D bank, Shift pushes, Space airbrakes |
+| G / right click | In flight: drop a glitter bomb |
 | F / click | Grappling hook |
 | E | Hop. In the air, A / D spins, and Space with W / S flips |
 | T | Switch to the next waypoint |
@@ -34,11 +35,14 @@ Then go to `http://localhost:8090`.
 ## What is in it
 
 - **An endless world:** the world has no edge. It is generated a region at a time from a seed as you drive: grassland, forest, desert, snowfields, mountains, seas, river canyons and cities. "New world" on the start screen generates a different one. Add `?seed=1234` to the address to pick one.
-- **Places to find:** every region has a landmark, a city, or a road junction. There are thirteen kinds of place in all, and more of each the further you go. A waypoint arrow points to the nearest one you have not found, and the map fills in as you drive.
+- **Places to find:** every region has a landmark, a city, or a road junction. There are fourteen kinds of place in all, and more of each the further you go. A waypoint arrow points to the nearest one you have not found, and the map fills in as you drive.
 - **Cities:** a grid of streets with a ring road, buildings with lit windows, parks and street lamps. Buildings are solid, and the grappling hook bites into them.
 - **Roads:** every place is linked by road, routed around steep ground and water. Roads are cut into hillsides, banked up across dips and carried over water on causeways, with berms, lamps and hedgerows along them. They are quicker to drive. Narrow side trails break off to dead ends with a lost parcel at each.
 - **Physics:** springy suspension, jumps, flips and spins, and tyres that slip: loose ground lets the tail step out, snow more so, and a road holds better. Go fast enough and the truck flattens trees and cacti and rolls over rocks; plough through them slowly, or one after another, and each costs a lot of speed and throws the truck about. Red mushrooms are trampolines.
 - **Wings:** press B and the truck unfolds wings and flies as a glider, trading height for speed and back. Hands off, it settles into a long shallow glide; Shift is a push for climbing. Touching down folds the wings, and flying into a building or landmark folds them the hard way.
+- **The sky:** floating islands you can land on and drive around, each with a crystal to collect; curving trails of rings that shove you forward; balloons to pop; thermals that lift you; blimps on slow circuits; and now and then a drone circling high up that fires a rocket at the ground, or at you.
+- **Glitter bombs:** in flight, G drops one (three at a time, one back every five seconds). Where it lands is yassified for good: pink sparkling ground, flowers, blossom trees, pink buildings with every window lit. A thief or hunter caught in it twirls, sparkles and is out of the game.
+- **Grow ops:** some regions hold a fenced compound of plastic tunnels and plant rows around a yard of water tanks, a trailer and a generator. The fence and the plants give way to a truck; the tunnels do not.
 - **Parcel thieves:** yellow buggies that run when you get close. Touch one to catch it.
 - **Hunter trucks:** black trucks that patrol and hunt by sight. Their red light shows from a long way off, and at night so do their headlights (and the thieves'). Break line of sight behind a hill, or creep through forest, and they lose you. They match your top speed, then tire to 95% after a long chase.
 - **Grappling hook:** one throw every 15 seconds. Hit a thief to reel it in, or a hunter to stun it so you can ram it. Miss, and the hook bites into whatever it lands on and drags the truck to it.
