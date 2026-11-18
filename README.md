@@ -41,5 +41,10 @@ Then go to `http://localhost:8090`.
 - **Hunter trucks:** black trucks that patrol and hunt by sight. Their red light shows from a long way off, and at night so do their headlights (and the thieves'). Break line of sight behind a hill, or creep through forest, and they lose you. They match your top speed, then tire to 95% after a long chase.
 - **Grappling hook:** hit a thief to reel it in, or a hunter to stun it so you can ram it. Miss, and the hook bites into whatever it lands on and drags the truck to it.
 - **Race mode:** one waypoint opens the same distance from you and a thief. First there scores, first to 5 wins.
+- **Two players:** press "Play with a friend" on the start screen, then "Copy invite link" and send it. Whoever opens that link joins you in the same world: you see each other's trucks (theirs is blue), what each of you flattens, and the thieves and hunters around each other. You can bump and hook each other, and key 3 races your friend instead of the thief. A room keeps its own save.
+
+## How two players connect
+
+There is no game server. The two browsers find each other through the public PeerJS broker (`0.peerjs.com`) and then talk directly over WebRTC, using Google's public STUN server to get through home routers. That means each player's IP address is visible to the other player and to those two services, as with any peer-to-peer game. It works on most home networks; some strict office or mobile networks block it.
 
 Progress saves in the browser's local storage. Add `?nosave` to the address to play without reading or writing the save.
