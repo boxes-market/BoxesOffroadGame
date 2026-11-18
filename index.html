@@ -248,10 +248,10 @@ function lookAt(e, c, u) {
 // ───────────────────────── world ─────────────────────────
 // The world has no edge. It is cut into regions, and everything in a region (its site, roads, parcels) is generated from the seed when first needed.
 const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 18, RW = 7.5;      // RW: half the width of a road
-const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9;
-const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon'];
-const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28]];
-const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22], [.7, .38, .24]];
+const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9, ALPS = 10;
+const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon', 'Alpine meadow'];
+const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28], [.33, .68, .27]];
+const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22], [.7, .38, .24], [.46, .34, .23]];
 const DEEPC = [.42, .42, .45], LINEC = [.93, .9, .78], PARAC = [.6, .6, .62];
 const ROADC = TOPC.map((c, i) => mix3(c, i === SNOW ? [.74, .74, .78] : [.58, .52, .43], 0.8));
 let landmarks = [], crates = [], lmObs = [];      // the sites, parcels and landmark obstacles in the regions around the truck
@@ -300,6 +300,20 @@ function canyonLand(x, z, whoops) {      // tablelands cut by deep gorges with a
   const wall = Math.min(1, (qi + smooth(0.55, 1, q - qi)) / 4);      // the walls go up in ledges
   return F + (M - F) * Math.min(wall, 1 - 0.55 * smooth(0.84, 0.96, sr));
 }
+function alpsMask(x, z) {      // alpine country: none round the start, and always some to the south-east of it
+  const sx = x - 256, sz = z - 256, d2 = sx * sx + sz * sz;
+  if (d2 < 144400) return 0;
+  const bx = x - 930, bz = z - 950, bump = 0.5 / (1 + (bx * bx + bz * bz) / 200000);
+  return smooth(0.58, 0.72, fbm(x / 700 - 91, z / 700 + 23, 23, 2) + bump) * smooth(380, 620, Math.sqrt(d2));
+}
+function alpsLand(x, z, hills) {      // green valleys with a river or a lake along the floor, meadows on the lower slopes, and rock and snow a long way above
+  // the valleys are two sets of roughly parallel lines, bent out of true: d is how far it is to the nearest one
+  const ux = (x + (fbm(x / 420 - 7, z / 420 + 113, 24, 2) - 0.5) * 220) / 420, uz = (z + (fbm(x / 420 + 40, z / 420 - 19, 28, 2) - 0.5) * 220) / 380;
+  const d = Math.min(Math.abs(ux - Math.floor(ux) - 0.5) * 420, Math.abs(uz - Math.floor(uz) - 0.5) * 380);
+  const lake = smooth(0.56, 0.7, fbm(x / 330 + 66, z / 330 + 3, 27, 2)), fw = 16 + 34 * lake, tw = lerp(3.5, fw * 0.85, lake);
+  const P = 62 + 70 * fbm(x / 240 + 31, z / 240 - 77, 25, 2) + 16 * (1 - Math.abs(fbm(x / 85 + 2, z / 85 + 6, 26, 2) * 2 - 1));
+  return lerp(lerp(-0.9, -2.8, lake), 2.2, smooth(tw * 0.6, tw * 1.25 + 1.2, d)) + (20 + (hills - 0.5) * 9) * smooth(fw, fw + 60, d) + (P - 20) * smooth(fw + 45, fw + 150, d);
+}
 function crag(L, x, z, k) {      // cliff bands: level benches with a wall between each, broken here and there by a gap a truck can get up
   const S = 7, w = fbm(x / 95 + 9, z / 95 - 33, 21, 2) * 9, t = (L + w) / S, ti = Math.floor(t);
   const terr = (ti + smooth(0.955, 0.995, t - ti)) * S - w;
@@ -314,16 +328,18 @@ function baseHeight(x, z) {      // the land before any road or town is built on
   const ridge = 1 - Math.abs(rn * 2 - 1);
   const mm = smooth(0.46, 0.64, fbm(x / 800 - 20, z / 800 + 31, 12, 2));      // mountain country comes and goes
   const whoops = fbm(x / 27 + 5, z / 27 - 9, 9, 2);
-  const cm = canyonMask(x, z), mt = cm < 1 ? massif(x, z) * (1 - cm) : 0;
+  const cm = canyonMask(x, z), am = cm < 1 ? alpsMask(x, z) * (1 - cm) : 0, mt = cm + am < 1 ? massif(x, z) * (1 - cm) * (1 - am) : 0;
+  if (cm + am >= 1) mtGap = 0;
   let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 + (whoops - 0.5) * 2.6 + ridge * ridge * mm * 42 + mt * (0.9 + 0.2 * ridge);
   // winding valleys: dry canyons through the high ground, shallow fordable rivers through the low
   if (L > -0.9) {
     const vr = 1 - Math.abs(fbm(x / 300 - 60, z / 300 + 90, 8, 2) * 2 - 1);
-    L = Math.max(L - vr * vr * vr * 20 * (1 - cm) * (1 - Math.min(1, mt / 40)), -0.9);
+    L = Math.max(L - vr * vr * vr * 20 * (1 - cm) * (1 - am) * (1 - Math.min(1, mt / 40)), -0.9);
   }
+  if (am > 0) L = lerp(L, alpsLand(x, z, hills), am);
   if (cm < 1 && L > 6) {      // cliffs all over the big mountains, and on ordinary hills in patches
     const sx = x - 256, sz = z - 256;
-    const k = Math.max(smooth(4, 26, mt), smooth(0.6, 0.7, fbm(x / 380 + 71, z / 380 + 19, 20, 2)) * smooth(260, 480, hyp(sx, sz))) * smooth(6, 14, L) * (1 - mtGap);
+    const k = Math.max(smooth(4, 26, mt), am * smooth(34, 46, L) * 0.85, smooth(0.6, 0.7, fbm(x / 380 + 71, z / 380 + 19, 20, 2)) * smooth(260, 480, hyp(sx, sz))) * smooth(6, 14, L) * (1 - mtGap);
     if (k > 0) L = crag(L, x, z, k);
   }
   if (cm > 0) L = lerp(L, canyonLand(x, z, whoops), cm);
@@ -400,6 +416,7 @@ function naturalBiome(x, z, h) {
   const alt = h - SEA;
   if (alt < 0) return SEABED;
   if (canyonMask(x, z) > 0.5) return CANYON;
+  if (alpsMask(x, z) > 0.5) return alt > 66 ? SNOW : alt > 46 ? ROCK : ALPS;
   const t = temp(x, z);
   if (t < -0.4) return SNOW;
   if (alt <= 1) return BEACH;
@@ -990,6 +1007,20 @@ function decoFlag(mb, x, y, z) {      // a marker pole with an orange pennant: t
   mb.box(x + .56, y + 2.6, z + .46, x + 1.6, y + 3.4, z + .54, GLAM ? [1, .5, .8] : [1, .5, .1]);
   mb.flag = f;
 }
+function chalet(mb, obs, x, y, z, r, cx, cz) {      // stone below, timber above, a broad roof, and flowers under the windows
+  const wood = GLAM ? [1, .7, .86] : jit([.5, .33, .2], .2, r), stone = [.74, .72, .68], roof = GLAM ? [.9, .5, .8] : r > .5 ? [.34, .2, .14] : [.5, .2, .15], f = mb.flag;
+  mb.box(x, y - 3, z, x + 7, y + 1.3, z + 6, stone);
+  mb.box(x - .15, y + 1.3, z - .15, x + 7.15, y + 3.6, z + 6.15, wood);
+  for (let k = 0; k < 4; k++) mb.box(x - .8, y + 3.6 + k * .62, z - .9 + k * .98, x + 7.8, y + 4.22 + k * .62, z + 6.9 - k * .98, k ? roof : jit(roof, .25, .2));
+  mb.box(x + 5.2, y + 4, z + 3.6, x + 5.9, y + 6.9, z + 4.3, stone);
+  mb.box(x + 3, y, z - .06, x + 4, y + 1.2, z, [.3, .2, .13]);
+  for (const wx of [1, 5]) for (const zz of [z - .2, z + 6.15]) {
+    mb.flag = f + 16; mb.box(x + wx, y + 2.1, zz, x + wx + 1, y + 3, zz + .05, [1, .88, .55]); mb.flag = f;
+    mb.box(x + wx - .3, y + 2.1, zz, x + wx, y + 3, zz + .05, [.2, .42, .26]); mb.box(x + wx + 1, y + 2.1, zz, x + wx + 1.3, y + 3, zz + .05, [.2, .42, .26]);
+    mb.box(x + wx - .15, y + 1.8, zz - .15, x + wx + 1.15, y + 2.1, zz + .2, [.9, .2, .3]);
+  }
+  obs.push({ kind: 'bldg', x: x + 3.5, z: z + 3, r: 0, rr: 8, x0: x, z0: z, x1: x + 7, z1: z + 6, y, top: y + 6, cx, cz });
+}
 function decoLamp(mb, x, y, z) {
   mb.box(x + .4, y, z + .4, x + .6, y + 4.2, z + .6, C.dmetal);
   const f = mb.flag; mb.flag = f + 16;       // the lantern glows
@@ -1083,6 +1114,7 @@ function buildChunk(cx, cz) {
     if (b === CANYON) { sw = Math.floor(vnoise(wx / 40, wz / 40, 55) * 4); tc = h < SEA + 5 ? CANYON_FLOOR : mix3(tc, STRATA[((h + sw) >> 1) % 5], 0.4); }       // sand on the gorge floor; each ledge takes the colour of its band
     if (rdv < RW && h >= SEA) tc = rmain && rdv < 0.9 && (((wx >> 2) + (wz >> 2)) & 1) ? mix3(ROADC[b], LINEC, 0.6) : ROADC[b];        // a dashed centre line on the main roads
     else if (rdv < RW + 1.9 && h >= SEA && baseHeight(wx + .5, wz + .5) < SEA - 0.3) tc = PARAC;         // stone parapets where a road crosses water
+    if (b === ALPS) tc = mix3(tc, [.52, .8, .3], vnoise(wx / 11, wz / 11, 61) * 0.7);      // meadows in more than one green
     massif(wx + .5, wz + .5);
     const onTrail = mtTrail && h > SEA + 8;
     if (onTrail && rdv >= RW) tc = mix3(tc, b === SNOW ? [.62, .6, .6] : [.5, .42, .33], 0.6);      // the worn track up a mountain gully
@@ -1190,6 +1222,19 @@ function buildChunk(cx, cz) {
       else if (r2 < 0.013) put('rock', r3 * 0.69, false);
     } else if (b === ROCK) {
       if (r2 < 0.014) put(rockKind, r3, false);
+    } else if (b === ALPS) {
+      if (h < SEA + 15) {      // the valley floor and the meadows: flowers everywhere, a chalet now and then, the odd pine
+        if (r2 < 0.0007) { if (rdv > RW + 9 && Math.abs(top(wx + 7, wz + 6) - h) < 2 && Math.abs(top(wx + 7, wz) - h) < 2 && Math.abs(top(wx, wz + 6) - h) < 2) chalet(mb, obs, wx, h, wz, r3, cx, cz); }
+        else if (r2 < 0.003) put('pine', r3, false);
+        else if (r2 < 0.009) put('bush', r3, jit(C.leaf2, .3, r3));
+        else if (r2 < 0.012) put('rock', r3, false);
+        else if (r2 < 0.11) { mb.box(wx + .45, h, wz + .45, wx + .55, h + .35, wz + .55, C.leaf); mb.box(wx + .34, h + .35, wz + .34, wx + .66, h + .62, wz + .66, FLOWERS[Math.floor(r3 * 4.99)]); }
+        else if (r2 < 0.2) mb.box(wx + .3 + r3 * .3, h, wz + .4, wx + .42 + r3 * .3, h + .28 + r3 * .2, wz + .52, jit([.3, .62, .22], .3, r3));
+      } else {      // higher up: the pine belt
+        if (r2 < 0.013) put('pine', r3, h > SEA + 40);
+        else if (r2 < 0.019) put(rockKind, r3, false);
+        else if (r2 < 0.05) mb.box(wx + .3 + r3 * .3, h, wz + .4, wx + .42 + r3 * .3, h + .28 + r3 * .2, wz + .52, jit([.26, .52, .22], .3, r3));
+      }
     } else if (b === CANYON) {
       if (r2 < (h < SEA + 5 ? 0.0024 : 0.0004)) { if (rdv > RW + 7) spire(mb, obs, wx, h, wz, r3, cx, cz); }
       else if (r2 < 0.006) put('cactus', r3);
@@ -1329,7 +1374,7 @@ let skyAct = newSky();      // what is in the sky around the truck
 // and where it is on it depends only on the clock, so both players see it in the same place; what each animal does is each player's own.
 const herdCache = new Map(), boatCache = new Map(), animals = [];
 let boatsAct = [], herdT = 0;
-const HERD_BIOME = [['sheep', 'deer', 'sheep'], ['deer'], ['camel'], ['penguin'], null, ['goat'], null, null, null, ['goat', 'camel']];
+const HERD_BIOME = [['sheep', 'deer', 'sheep'], ['deer'], ['camel'], ['penguin'], null, ['goat'], null, null, null, ['goat', 'camel'], ['cow', 'cow', 'goat']];
 function herdsOf(rx, rz) {
   const k = rkey(rx, rz);
   let hs = herdCache.get(k);
@@ -1775,9 +1820,9 @@ if (save && (save.found || []).length + (save.crates || []).length > 0) {
 }
 
 // ───────────────────────── physics ─────────────────────────
-const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8, 5.6];
-const MU = [.8, .76, .64, .6, .62, .92, .5, 1.1, .8, .88];      // how steep a slope the tyres can still drive up, by ground      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
-const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3], [.8, .5, .32]];
+const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8, 5.6, 5];
+const MU = [.8, .76, .64, .6, .62, .92, .5, 1.1, .8, .88, .82];      // how steep a slope the tyres can still drive up, by ground      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
+const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3], [.8, .5, .32], [.45, .4, .26]];
 function puff(x, y, z, col, size, up, em = 0.1) {
   if (parts.length > 260) parts.shift();
   parts.push({ x, y, z, vx: (Math.random() - .5) * 2, vy: up + Math.random() * 1.5, vz: (Math.random() - .5) * 2, life: 0.7 + Math.random() * 0.4, t: 0, size, col, em });
@@ -2464,6 +2509,7 @@ const SPECIES = {
   deer: { leg: 1, lx: .22, lz: .55, lw: .13, legc: [.5, .34, .2], run: 15, walk: 1.6, gait: 1.7, r: .7, sc: 1.1, cry: 'OOF!', pitch: 300 },
   camel: { leg: 1.5, lx: .28, lz: .7, lw: .17, legc: [.66, .5, .3], run: 11, walk: 1.5, gait: 1.2, r: .9, sc: 1.1, cry: 'GRONK!', pitch: 150 },
   goat: { leg: .7, lx: .2, lz: .42, lw: .12, legc: [.75, .73, .68], run: 13, walk: 1.5, gait: 2.4, r: .6, sc: 1.1, cry: 'MEH!', pitch: 520 },
+  cow: { leg: .75, lx: .32, lz: .6, lw: .17, legc: [.93, .91, .86], run: 8.5, walk: 1.1, gait: 1.9, r: .95, sc: 1.15, cry: 'MOO!', pitch: 170 },
   penguin: { leg: 0, run: 7, walk: 0.9, gait: 5, r: .5, sc: 1.2, cry: 'NOOT!', pitch: 700 },
 };
 const animalMesh = (() => {      // bodies only, standing at the origin and facing +Z; the legs are drawn separately so they can swing
@@ -2474,6 +2520,9 @@ const animalMesh = (() => {      // bodies only, standing at the origin and faci
       m.box(-.31, 2.42, .85, -.21, 2.95, .95, d); m.box(.21, 2.42, .85, .31, 2.95, .95, d); m.box(-.52, 2.78, .85, -.31, 2.88, .95, d); m.box(.31, 2.78, .85, .52, 2.88, .95, d); m.box(-.12, 1.3, -.88, .12, 1.6, -.75, w); m.box(-.28, 1, -.74, .28, 1.12, .74, w); }),
     camel: mk(m => { const c = [.78, .62, .38], d = [.68, .52, .3]; m.box(-.4, 1.5, -.95, .4, 2.25, .95, c); m.box(-.3, 2.25, -.5, .3, 2.78, .25, d); m.box(-.17, 2, .85, .17, 3.15, 1.2, c); m.box(-.2, 2.95, 1.05, .2, 3.32, 1.72, c); m.box(-.13, 2.98, 1.72, .13, 3.2, 1.8, dk); m.box(-.06, 1.5, -1.05, .06, 2.1, -.95, d); }),
     goat: mk(m => { const c = [.88, .86, .8], hn = [.32, .28, .22]; m.box(-.27, .7, -.55, .27, 1.2, .55, c); m.box(-.17, 1.1, .5, .17, 1.52, .92, c); m.box(-.15, 1.52, .5, -.07, 1.85, .6, hn); m.box(.07, 1.52, .5, .15, 1.85, .6, hn); m.box(-.15, 1.75, .36, -.07, 1.85, .5, hn); m.box(.07, 1.75, .36, .15, 1.85, .5, hn); m.box(-.06, .92, .8, .06, 1.1, .9, [.7, .68, .62]); m.box(-.08, 1.1, -.64, .08, 1.3, -.55, c); }),
+    cow: mk(m => { const c = [.5, .3, .18], w = [.95, .93, .88]; m.box(-.45, .75, -.85, .45, 1.55, .85, c); m.box(-.46, 1, -.3, .46, 1.56, .35, w); m.box(-.46, .9, -.86, -.1, 1.3, -.5, w);
+      m.box(-.25, 1.1, .85, .25, 1.62, 1.42, w); m.box(-.26, 1.35, .85, .26, 1.63, 1.15, c); m.box(-.17, 1.1, 1.42, .17, 1.35, 1.5, [.9, .68, .68]); m.box(-.42, 1.55, .9, -.25, 1.65, 1, w); m.box(.25, 1.55, .9, .42, 1.65, 1, w);
+      m.box(-.1, .85, .7, .1, 1.05, .86, [1, .82, .25]); m.box(-.2, .6, -.45, .2, .78, -.05, [.92, .7, .7]); m.box(-.05, .8, -.95, .05, 1.5, -.85, c); }),
     penguin: mk(m => { const b = [.13, .14, .18], o = [.95, .6, .15]; m.box(-.3, .12, -.26, .3, 1.05, .26, b); m.box(-.21, .18, .26, .21, .95, .31, [.96, .96, .94]); m.box(-.23, 1.05, -.22, .23, 1.45, .22, b); m.box(-.08, 1.15, .22, .08, 1.25, .42, o); m.box(-.24, 0, -.05, -.06, .12, .36, o); m.box(.06, 0, -.05, .24, .12, .36, o); m.box(-.38, .4, -.12, -.3, .95, .12, b); m.box(.3, .4, -.12, .38, .95, .12, b); }),
   };
 })();
@@ -3231,7 +3280,7 @@ requestAnimationFrame(frame);
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the world…', '', 60); });
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
-window.__game = { get mt() { return [mtGap, mtTrail]; }, animals, get boats() { return boatsAct; }, herdsOf, boatsOf, orbitPos, canyonMask, massif, car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+window.__game = { alpsMask, get mt() { return [mtGap, mtTrail]; }, animals, get boats() { return boatsAct; }, herdsOf, boatsOf, orbitPos, canyonMask, massif, car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
 })();
 </script>
 </body>
