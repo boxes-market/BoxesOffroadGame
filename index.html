@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Voxel Driver</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1220; color: #eef2f7;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; -webkit-user-select: none; user-select: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .panel { background: rgba(10, 16, 28, .62); border: 1px solid rgba(255,255,255,.14); border-radius: 10px;
+    padding: 10px 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #stats { position: absolute; left: 14px; top: 14px; font-size: 13px; line-height: 1.55; }
+  #stats .title { font-weight: 800; letter-spacing: .14em; font-size: 12px; color: #ffcf5a; margin-bottom: 2px; }
+  #stats b { color: #fff; }
+  #track { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; align-items: center;
+    gap: 12px; min-width: 230px; }
+  #arrow { width: 34px; height: 34px; flex: none; transition: transform .08s linear; }
+  #trackName { font-size: 13px; font-weight: 700; }
+  #trackSub { font-size: 12px; opacity: .78; }
+  #speed { position: absolute; left: 14px; bottom: 14px; min-width: 120px; }
+  #speed b { font-size: 30px; }
+  #speed small { opacity: .7; margin-left: 5px; }
+  #biome { font-size: 12px; opacity: .78; margin-top: 2px; }
+  #miniWrap { position: absolute; right: 14px; bottom: 14px; padding: 6px; }
+  #mini { display: block; width: 180px; height: 180px; border-radius: 6px; image-rendering: pixelated; }
+  #btns { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; pointer-events: auto; }
+  button { font: inherit; font-size: 12px; color: #eef2f7; background: rgba(10,16,28,.62);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+  button:hover { background: rgba(40,56,84,.8); }
+  button.big { font-size: 15px; font-weight: 800; padding: 12px 22px; background: #ffb52e; color: #1b1405; border: 0; }
+  button.big:hover { background: #ffc75c; }
+  #help { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 11px; opacity: .7;
+    white-space: nowrap; text-shadow: 0 1px 2px #000; }
+  #toast { position: absolute; left: 50%; top: 86px; transform: translate(-50%, -12px); opacity: 0; text-align: center;
+    transition: opacity .35s, transform .35s; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast .k { font-size: 11px; letter-spacing: .2em; color: #ffcf5a; }
+  #toast .n { font-size: 22px; font-weight: 800; margin: 2px 0; }
+  #toast .l { font-size: 13px; opacity: .85; }
+  .opt { font-size: 13px; display: flex; gap: 7px; align-items: center; cursor: pointer; border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px; padding: 7px 10px; }
+  .opt input { accent-color: #ffb52e; width: 15px; height: 15px; }
+  #pop { position: absolute; left: 50%; top: 30%; transform: translate(-50%, 0) scale(.6); opacity: 0; font-size: 34px; font-weight: 900;
+    letter-spacing: .06em; color: #ffcf5a; text-shadow: 0 3px 0 #3a2a05, 0 0 18px rgba(0,0,0,.6); white-space: nowrap; }
+  #pop.show { animation: pop 1.5s ease-out forwards; }
+  @keyframes pop { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.5); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+    22% { transform: translate(-50%, 0) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px) scale(1); } }
+  .ov { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(6, 10, 18, .55); z-index: 5; }
+  .ov.on { display: flex; }
+  .card { max-width: 720px; width: calc(100vw - 40px); max-height: calc(100vh - 40px); overflow: auto; padding: 22px 26px; }
+  h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: .08em; color: #ffcf5a; }
+  h2 { margin: 0 0 12px; font-size: 20px; letter-spacing: .08em; color: #ffcf5a; }
+  p { margin: 8px 0; line-height: 1.5; font-size: 14px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; margin: 14px 0; }
+  .keys span:nth-child(odd) { color: #ffcf5a; white-space: nowrap; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  #jgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .jc { border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 10px; font-size: 12px; line-height: 1.45; }
+  .jc.found { border-color: #ffcf5a; background: rgba(255, 207, 90, .08); }
+  .jc .jn { font-weight: 800; font-size: 13px; margin-bottom: 3px; }
+  .jc .jw { opacity: .65; margin-top: 4px; }
+  #bigmap { width: min(78vh, 78vw, 620px); height: min(78vh, 78vw, 620px); image-rendering: pixelated; border-radius: 8px; display: block; }
+  #touch { display: none; position: fixed; inset: auto 0 0 0; height: 0; pointer-events: none; z-index: 3; }
+  #touch button { position: absolute; bottom: 210px; width: 64px; height: 64px; font-size: 24px; border-radius: 50%;
+    pointer-events: auto; touch-action: none; }
+  @media (pointer: coarse) { #touch { display: block; } #help { display: none; } #speed { bottom: 90px; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <div id="stats" class="panel">
+    <div class="title">VOXEL DRIVER</div>
+    <div><b id="sFound">0</b>/12 landmarks</div>
+    <div><b id="sCrates">0</b>/30 lost parcels</div>
+    <div><b id="sExpl">0</b>% explored</div>
+    <div><b id="sKm">0.0</b> km driven</div>
+    <div><b id="sSmash">0</b> things flattened</div>
+    <div id="sNpc"></div>
+  </div>
+  <div id="track" class="panel">
+    <svg id="arrow" viewBox="-20 -20 40 40"><circle r="18" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/><path d="M0 -14 L9 8 L0 3 L-9 8 Z" fill="#ffcf5a"/></svg>
+    <div><div id="trackName">Waypoint</div><div id="trackSub"></div></div>
+  </div>
+  <div id="btns">
+    <button id="bJournal">Journal (J)</button>
+    <button id="bMap">Map (M)</button>
+  </div>
+  <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div></div>
+  <div id="miniWrap" class="panel"><canvas id="mini" width="180" height="180"></canvas></div>
+  <div id="help">WASD drive · Space handbrake · Shift boost · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
+  <div id="toast" class="panel"></div>
+  <div id="pop"></div>
+</div>
+
+<div id="touch">
+  <button data-k="left" style="left:18px">◀</button>
+  <button data-k="right" style="left:96px">▶</button>
+  <button data-k="down" style="right:96px">▼</button>
+  <button data-k="up" style="right:18px">▲</button>
+  <button data-k="hop" style="right:57px; bottom:286px">⤒</button>
+</div>
+
+<div id="ovStart" class="ov on"><div class="card panel">
+  <h1>VOXEL DRIVER</h1>
+  <p>An off-road expedition across a procedurally generated voxel island. Twelve landmarks are out there —
+  in the snowfields up north, the desert down south, on the peaks and along the coast. Follow the waypoint arrow,
+  pick your own line over the terrain, and chart the whole island.</p>
+  <div class="keys">
+    <span>W A S D / arrows</span><span>Drive and steer</span>
+    <span>Space</span><span>Handbrake (drift)</span>
+    <span>Shift</span><span>Boost — fast enough and you plough through trees and bounce over rocks</span>
+    <span>E</span><span>Hop. In the air, A / D spins, and Space with W / S flips. Red mushrooms are trampolines.</span>
+    <span>T</span><span>Switch to the next waypoint</span>
+    <span>J · M</span><span>Journal of landmarks · full island map</span>
+    <span>C · R</span><span>Camera distance · recover the truck if you get stuck</span>
+    <span>1 · 2</span><span>Switch parcel thieves · hunter trucks on or off while driving</span>
+    <span>3</span><span>Race mode: one waypoint opens the same distance from you and a thief. First there scores, first to 5 wins.</span>
+  </div>
+  <div class="row" style="margin-top:4px">
+    <label class="opt"><input type="checkbox" id="oThieves"> Parcel thieves to chase down</label>
+    <label class="opt"><input type="checkbox" id="oHunters"> Hunter trucks that chase you</label>
+  </div>
+  <p id="startInfo" style="opacity:.75"></p>
+  <div class="row">
+    <button class="big" id="bStart">Start driving</button>
+    <button class="big" id="bRace" style="background:#ff5ad9;color:#2a0622">Race the thief</button>
+    <button id="bNew">New island</button>
+  </div>
+</div></div>
+
+<div id="ovJournal" class="ov"><div class="card panel">
+  <h2>EXPEDITION JOURNAL</h2>
+  <div id="jgrid"></div>
+  <div class="row"><button id="bJClose">Back to the truck (J)</button></div>
+</div></div>
+
+<div id="ovMap" class="ov"><div class="card panel" style="width:auto">
+  <h2>ISLAND MAP</h2>
+  <canvas id="bigmap" width="620" height="620"></canvas>
+  <div class="row"><button id="bMClose">Back to the truck (M)</button><span style="font-size:12px;opacity:.7">Gold = found · ring = current waypoint · the map fills in as you drive</span></div>
+</div></div>
+
+<div id="ovWin" class="ov"><div class="card panel">
+  <h1>ISLAND CHARTED</h1>
+  <p id="winText"></p>
+  <div class="row"><button class="big" id="bKeep">Keep exploring</button><button id="bNew2">New island</button></div>
+</div></div>
+
+<div id="nogl" class="ov"><div class="card panel"><h2>WebGL2 needed</h2><p>This game needs a browser with WebGL2 turned on.</p></div></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+// ───────────────────────── save / seed ─────────────────────────
+const SAVE_KEY = 'voxel-driver-v4';
+const NOSAVE = new URLSearchParams(location.search).has('nosave');   // test drives: neither read nor write the save
+let save = null;
+try { if (!NOSAVE) save = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
+const qSeed = Number(new URLSearchParams(location.search).get('seed'));
+if (qSeed && (!save || save.seed !== qSeed)) save = null;
+const SEED = save && Number.isFinite(save.seed) ? save.seed : (qSeed || 4107);
+
+// ───────────────────────── math helpers ─────────────────────────
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { let t = (x - a) / (b - a); t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); };
+const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const norm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function angDiff(a, b) { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hash2(x, z, s) {
+  let h = (Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(z | 0, 0x165667b1) ^ Math.imul((s + SEED) | 0, 0x9e3779b1)) | 0;
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, z, s) {
+  const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const a = hash2(xi, zi, s), b = hash2(xi + 1, zi, s), c = hash2(xi, zi + 1, s), d = hash2(xi + 1, zi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, z, s, oct) {
+  let a = 0, amp = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { a += amp * vnoise(x * f, z * f, s + i * 17); n += amp; amp *= 0.5; f *= 2; }
+  return a / n;
+}
+
+// mat4, column-major
+function mul(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  return o;
+}
+const ident = () => { const o = new Float32Array(16); o[0] = o[5] = o[10] = o[15] = 1; return o; };
+const T = (x, y, z) => { const o = ident(); o[12] = x; o[13] = y; o[14] = z; return o; };
+const Sc = (x, y, z) => { const o = ident(); o[0] = x; o[5] = y; o[10] = z; return o; };
+const RX = a => { const o = ident(), c = Math.cos(a), s = Math.sin(a); o[5] = c; o[6] = s; o[9] = -s; o[10] = c; return o; };
+const RY = a => { const o = ident(), c = Math.cos(a), s = Math.sin(a); o[0] = c; o[2] = -s; o[8] = s; o[10] = c; return o; };
+const RZ = a => { const o = ident(), c = Math.cos(a), s = Math.sin(a); o[0] = c; o[1] = s; o[4] = -s; o[5] = c; return o; };
+const RA = (x, y, z, a) => { const c = Math.cos(a), s = Math.sin(a), t = 1 - c, o = ident();
+  o[0] = t * x * x + c; o[1] = t * x * y + s * z; o[2] = t * x * z - s * y; o[4] = t * x * y - s * z; o[5] = t * y * y + c; o[6] = t * y * z + s * x;
+  o[8] = t * x * z + s * y; o[9] = t * y * z - s * x; o[10] = t * z * z + c; return o; };
+const mulN = (...m) => m.reduce((a, b) => mul(a, b));
+function persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2), o = new Float32Array(16); o[0] = t / asp; o[5] = t; o[10] = (f + n) / (n - f); o[11] = -1; o[14] = 2 * f * n / (n - f); return o; }
+function lookAt(e, c, u) {
+  const z = norm3([e[0] - c[0], e[1] - c[1], e[2] - c[2]]), x = norm3(cross(u, z)), y = cross(z, x);
+  const o = new Float32Array(16);
+  o[0] = x[0]; o[1] = y[0]; o[2] = z[0]; o[4] = x[1]; o[5] = y[1]; o[6] = z[1]; o[8] = x[2]; o[9] = y[2]; o[10] = z[2];
+  o[12] = -(x[0] * e[0] + x[1] * e[1] + x[2] * e[2]); o[13] = -(y[0] * e[0] + y[1] * e[1] + y[2] * e[2]); o[14] = -(z[0] * e[0] + z[1] * e[1] + z[2] * e[2]); o[15] = 1;
+  return o;
+}
+
+// ───────────────────────── world ─────────────────────────
+const SEA = 12, WATER = SEA - 0.22, R = 620, CH = 16, RD = 9;
+const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6;
+const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows'];
+const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48]];
+const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4]];
+const DEEPC = [.42, .42, .45];
+const landmarks = [];   // filled by placeLandmarks
+
+function rawHeight(x, z) {
+  const d = Math.hypot(x, z) / R;
+  const coast = d + (fbm(x / 145 + 7.1, z / 145 - 3.3, 11, 3) - 0.5) * 0.38;
+  const fall = 1 - smooth(0.6, 1.0, coast);
+  const e = fbm(x / 260, z / 260, 1, 4);
+  const hills = fbm(x / 62, z / 62, 2, 3);
+  const rn = fbm(x / 240 + 40, z / 240 + 40, 3, 2);
+  const ridge = 1 - Math.abs(rn * 2 - 1);
+  const mm = 1 - smooth(0.12, 0.62, d);
+  const whoops = fbm(x / 27 + 5, z / 27 - 9, 9, 2);
+  let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 + (whoops - 0.5) * 2.6 + ridge * ridge * mm * 42;
+  // winding valleys: dry canyons through the high ground, shallow fordable rivers through the low
+  if (L > -0.9) {
+    const vr = 1 - Math.abs(fbm(x / 230 - 60, z / 230 + 90, 8, 2) * 2 - 1);
+    L = Math.max(L - vr * vr * vr * 20, -0.9);
+  }
+  return SEA + L * fall - 9 * (1 - fall);
+}
+function heightF(x, z) {
+  let h = rawHeight(x, z);
+  for (let i = 0; i < landmarks.length; i++) {
+    const lm = landmarks[i], dx = x - lm.x, dz = z - lm.z, d2 = dx * dx + dz * dz, ro = lm.pad + 10;
+    if (d2 < ro * ro) { const t = 1 - smooth(lm.pad, ro, Math.sqrt(d2)); h += (lm.y + 0.5 - h) * t; }
+  }
+  return h;
+}
+const top = (x, z) => Math.floor(heightF(x + 0.5, z + 0.5));
+function groundAt(x, z) {
+  const fx = x - 0.5, fz = z - 0.5, x0 = Math.floor(fx), z0 = Math.floor(fz), u = fx - x0, v = fz - z0;
+  const a = top(x0, z0), b = top(x0 + 1, z0), c = top(x0, z0 + 1), d = top(x0 + 1, z0 + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const temp = (x, z) => z / R * 1.25 + (fbm(x / 320 + 31, z / 320 + 47, 5, 2) - 0.5) * 0.8;
+function biomeAt(x, z, h) {
+  const alt = h - SEA;
+  if (alt < 0) return SEABED;
+  const t = temp(x, z);
+  if (t < -0.4) return SNOW;
+  if (alt <= 1) return BEACH;
+  if (t > 0.42) return DESERT;
+  if (alt > 56) return SNOW;
+  if (alt > 40) return ROCK;
+  return fbm(x / 185 - 12, z / 185 + 8, 6, 3) > 0.54 ? FOREST : GRASS;
+}
+function isCoast(x, z) {
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (rawHeight(x + Math.cos(a) * 26, z + Math.sin(a) * 26) < SEA - 1) return true; }
+  return false;
+}
+function sectorName(x, z) {
+  if (Math.hypot(x, z) < R * 0.2) return 'near the heart of the island';
+  const names = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+  const a = Math.atan2(x, -z); return 'in the ' + names[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+}
+
+// ───────────────────────── mesh builder ─────────────────────────
+class MB {
+  constructor() { this.v = []; this.i = []; this.n = 0; this.lo = 0.85; this.flag = 0; }
+  quad(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, r, g, b, n, s0 = 1, s1 = 1, s2 = 1, s3 = 1, flip = false) {
+    n += this.flag;
+    this.v.push(ax, ay, az, r * s0, g * s0, b * s0, n, bx, by, bz, r * s1, g * s1, b * s1, n,
+      cx, cy, cz, r * s2, g * s2, b * s2, n, dx, dy, dz, r * s3, g * s3, b * s3, n);
+    const k = this.n;
+    if (flip) this.i.push(k + 1, k + 2, k + 3, k + 1, k + 3, k); else this.i.push(k, k + 1, k + 2, k, k + 2, k + 3);
+    this.n += 4;
+  }
+  box(x0, y0, z0, x1, y1, z1, c) {
+    const r = c[0], g = c[1], b = c[2], lo = this.lo;
+    this.quad(x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, r, g, b, 0, lo, 1, 1, lo);
+    this.quad(x0, y0, z0, x0, y1, z0, x0, y1, z1, x0, y0, z1, r, g, b, 1, lo, 1, 1, lo);
+    this.quad(x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, r, g, b, 2);
+    this.quad(x0, y0, z0, x0, y0, z1, x1, y0, z1, x1, y0, z0, r, g, b, 3, lo, lo, lo, lo);
+    this.quad(x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, r, g, b, 4, lo, lo, 1, 1);
+    this.quad(x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0, r, g, b, 5, lo, lo, 1, 1);
+  }
+  cbox(cx, y0, cz, sx, sy, sz, c) { this.box(cx - sx / 2, y0, cz - sz / 2, cx + sx / 2, y0 + sy, cz + sz / 2, c); }
+}
+const jit = (c, amt, r) => { const k = 1 + (r - 0.5) * amt; return [c[0] * k, c[1] * k, c[2] * k]; };
+
+// ───────────────────────── landmark definitions ─────────────────────────
+const C = {
+  stone: [.62, .62, .64], dstone: [.42, .43, .46], white: [.95, .95, .93], red: [.78, .2, .18], wood: [.5, .35, .22],
+  dwood: [.33, .22, .14], sand: [.86, .74, .48], gold: [1, .82, .25], leaf: [.24, .5, .2], leaf2: [.3, .58, .24],
+  ice: [.68, .86, .96], dice: [.5, .72, .9], metal: [.72, .75, .8], dmetal: [.35, .38, .42], black: [.1, .1, .12],
+  orange: [.95, .5, .12], cream: [.93, .88, .74], glass: [.3, .75, .8], hay: [.9, .78, .35], snow: [.96, .97, 1],
+  roof: [.3, .2, .2], card: [.78, .6, .38],
+};
+const LM_DEFS = [
+  { id: 'tower', name: 'Station 7', lore: 'Still broadcasting. Mostly static, sometimes jazz.', hint: 'Look up. Higher. It stands on the high ground.',
+    pad: 10, flat: 9, want: (b, alt) => alt >= 40,
+    build(m, g, x, o) {
+      for (let i = 0; i < 10; i++) { const s = 2.4 - i * 0.2; m.cbox(0, i * 2.6, 0, s, 2.6, s, i % 2 ? C.white : C.red); }
+      m.cbox(0, 26, 0, 0.25, 5, 0.25, C.dmetal); g.cbox(0, 31, 0, 0.6, 0.6, 0.6, [1, .2, .2]);
+      m.cbox(1.2, 18, 0, 0.4, 1.6, 1.6, C.metal); m.cbox(-1.1, 21, 0, 0.4, 1.2, 1.2, C.metal);
+      m.cbox(5, 0, 1, 3.4, 2.6, 3, C.metal); m.cbox(5, 2.6, 1, 3.8, 0.3, 3.4, C.dmetal);
+      m.cbox(5, 0, 2.55, 0.9, 1.9, 0.1, C.dmetal); g.cbox(4, 1.5, 2.55, 0.6, 0.5, 0.1, [.4, 1, .5]);
+      o.push([0, 0, 1.8], [5, 1, 2.4]);
+    } },
+  { id: 'wreck', name: 'The Marigold', lore: 'She found the island the hard way.', hint: 'Timber ribs on a quiet beach.',
+    pad: 10, flat: 3.5, want: (b, alt, x, z) => alt <= 3 && isCoast(x, z),
+    xmat: () => mulN(T(0, -0.5, 0), RZ(0.28), RY(0.5)),
+    build(m, g, x, o) {
+      x.cbox(0, 0, 0, 3, 1.2, 11, C.dwood); x.cbox(0, 1.2, 0, 4.4, 1.2, 13, C.wood);
+      x.cbox(-2.1, 2.4, 0, 0.3, 0.9, 13, C.dwood); x.cbox(2.1, 2.4, 0, 0.3, 0.9, 13, C.dwood); x.cbox(0, 2.4, -6.4, 4.4, 0.9, 0.3, C.dwood);
+      x.cbox(0, 1.2, 7.2, 2.6, 1.6, 1.6, C.wood); x.cbox(0, 1.6, 8.4, 1.2, 1.2, 1.2, C.wood);
+      x.cbox(0, 2.4, 1, 0.5, 8, 0.5, C.dwood); x.cbox(0, 8.2, 1, 5, 0.3, 0.3, C.dwood); x.cbox(0, 5, 1.2, 4.2, 3.2, 0.12, C.cream);
+      x.cbox(0, 2.4, -4.5, 3.2, 1.8, 3, C.wood);
+      m.cbox(5, 0, 3, 0.9, 1.1, 0.9, C.wood); m.cbox(-5, 0, -3, 2, 0.2, 0.5, C.dwood); m.cbox(4, 0, -5, 0.5, 0.2, 2.2, C.dwood);
+      o.push([1.4, 2.6, 2.8], [-1.4, -2.6, 2.8], [3, 5.4, 1.8], [5, 3, 0.7]);
+    } },
+  { id: 'lighthouse', name: 'Saltwind Lighthouse', lore: 'Its lamp still burns, though no ship has called in years.', hint: 'Tall, striped, and never far from the sea.',
+    pad: 8, flat: 3.5, want: (b, alt, x, z) => alt <= 8 && b !== SNOW && isCoast(x, z),
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 6, 0.8, 6, C.dstone);
+      for (let i = 0; i < 8; i++) { const s = 3.8 - i * 0.2; m.cbox(0, 0.8 + i * 1.5, 0, s, 1.5, s, i % 2 ? C.red : C.white); }
+      m.cbox(0, 12.8, 0, 3.6, 0.4, 3.6, C.dstone); g.cbox(0, 13.2, 0, 1.5, 1.5, 1.5, [1, .92, .55]);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) m.cbox(a * 0.9, 13.2, b * 0.9, 0.25, 1.5, 0.25, C.dmetal);
+      m.cbox(0, 14.7, 0, 2.8, 0.4, 2.8, C.red); m.cbox(0, 15.1, 0, 1.8, 0.5, 1.8, C.red); m.cbox(0, 15.6, 0, 0.6, 0.8, 0.6, C.red);
+      m.cbox(0, 0.8, 1.95, 1, 1.8, 0.2, C.dwood);
+      o.push([0, 0, 3.1]);
+    } },
+  { id: 'pyramid', name: 'The Sunken Ziggurat', lore: 'Somebody stacked a lot of sandstone a very long time ago.', hint: 'Sharp corners under a hot sun.',
+    pad: 13, flat: 4, want: b => b === DESERT,
+    build(m, g, x, o) {
+      for (let i = 0; i < 8; i++) { const s = 17 - 2 * i; m.cbox(0, i * 1.1, 0, s, 1.1, s, jit(C.sand, 0.12, (i * 0.37) % 1)); }
+      m.cbox(0, 8.8, 0, 1.4, 1.2, 1.4, C.gold); m.cbox(0, 0, 8.55, 1.8, 2, 0.2, C.black);
+      m.cbox(-1.3, 0, 8.7, 0.6, 2.6, 0.6, C.sand); m.cbox(1.3, 0, 8.7, 0.6, 2.6, 0.6, C.sand);
+      o.push([0, 0, 8.6]);
+    } },
+  { id: 'frost', name: 'Frostkeep', lore: 'A castle that melts a little every summer and regrows every winter.', hint: 'Blue walls where the snow never melts.',
+    pad: 11, flat: 4, want: (b, alt) => b === SNOW && alt >= 3,
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 5, 6, 5, C.ice); m.cbox(0, 6, 0, 5.6, 0.6, 5.6, C.dice);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        m.cbox(a * 2.3, 6.6, b * 2.3, 1, 0.8, 1, C.ice);
+        m.cbox(a * 6, 0, b * 6, 2.2, 7.5, 2.2, C.ice); m.cbox(a * 6, 7.5, b * 6, 2.8, 0.5, 2.8, C.dice);
+        m.cbox(a * 6, 8, b * 6, 1.6, 1.4, 1.6, C.dice); m.cbox(a * 6, 9.4, b * 6, 0.7, 1.2, 0.7, C.white);
+        o.push([a * 6, b * 6, 1.5]);
+      }
+      m.cbox(0, 6.6, 0, 2, 3, 2, C.dice); m.cbox(0, 9.6, 0, 1, 2, 1, C.ice); m.cbox(0, 11.6, 0, 0.4, 1.4, 0.4, C.white);
+      m.cbox(0, 0, 2.55, 1.4, 2.4, 0.15, C.dice); g.cbox(0, 3.4, 2.55, 0.7, 0.9, 0.1, [.6, .95, 1]);
+      o.push([0, 0, 3.2]);
+    } },
+  { id: 'windmill', name: "Millers' Rest", lore: 'The sails creak round on nothing but habit.', hint: 'Something turns slowly above open grass.',
+    pad: 8, flat: 3.5, want: (b, alt) => b === GRASS && alt >= 3,
+    xmat: t => mulN(T(0, 8.35, 2.95), RZ(t * 0.7)),
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 5, 1, 5, C.stone);
+      for (let i = 0; i < 6; i++) { const s = 4.4 - i * 0.3; m.cbox(0, 1 + i * 1.4, 0, s, 1.4, s, C.cream); }
+      m.cbox(0, 9.4, 0, 3.6, 0.6, 3.6, C.roof); m.cbox(0, 10, 0, 2.4, 0.6, 2.4, C.roof); m.cbox(0, 10.6, 0, 1.2, 0.5, 1.2, C.roof);
+      m.cbox(0, 1, 2.25, 1.1, 1.9, 0.15, C.dwood); m.cbox(0, 5.5, 1.9, 0.8, 0.8, 0.15, C.black);
+      m.cbox(0, 8.1, 2.0, 0.5, 0.5, 1.8, C.dwood);
+      x.box(-.12, 0, -.05, .12, 6, .05, C.dwood); x.box(.12, 1.2, -.04, 1.3, 5.8, .04, C.cream);
+      x.box(0, -.12, -.05, 6, .12, .05, C.dwood); x.box(1.2, -1.3, -.04, 5.8, -.12, .04, C.cream);
+      x.box(-.12, -6, -.05, .12, 0, .05, C.dwood); x.box(-1.3, -5.8, -.04, -.12, -1.2, .04, C.cream);
+      x.box(-6, -.12, -.05, 0, .12, .05, C.dwood); x.box(-5.8, .12, -.04, -1.2, 1.3, .04, C.cream);
+      o.push([0, 0, 3.0]);
+    } },
+  { id: 'tree', name: 'Grandmother Oak', lore: 'Older than the roads, and there are no roads.', hint: 'One tree in the forest outgrew all the others.',
+    pad: 9, flat: 3.5, want: b => b === FOREST,
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 3.2, 13, 3.2, C.wood);
+      m.cbox(2.1, 0, 0, 1.4, 1.6, 1.2, C.dwood); m.cbox(-2.1, 0, 0, 1.4, 1.2, 1.2, C.dwood); m.cbox(0, 0, 2.1, 1.2, 1.4, 1.4, C.dwood); m.cbox(0, 0, -2.1, 1.2, 1.8, 1.4, C.dwood);
+      m.cbox(0, 10, 0, 13, 3, 13, C.leaf); m.cbox(0, 13, 0, 10, 3, 10, C.leaf2); m.cbox(0, 16, 0, 6, 2.5, 6, C.leaf);
+      m.cbox(4, 8.5, 3, 5, 2, 5, C.leaf2); m.cbox(-4.5, 8, -2, 4, 2.5, 4, C.leaf);
+      g.cbox(1.62, 3, 0.4, 0.1, 0.5, 0.5, [1, .85, .4]);
+      o.push([0, 0, 2.7]);
+    } },
+  { id: 'ufo', name: 'The Uninvited Guest', lore: 'Parked badly. No sign of the driver.', hint: 'Something fell out of the sky into the sand.',
+    pad: 10, flat: 3.5, want: b => b === DESERT,
+    xmat: () => mulN(T(0, 1.2, 0), RZ(0.32), RX(0.12)),
+    build(m, g, x, o) {
+      x.cbox(0, 0, 0, 6, 0.5, 6, C.dmetal); x.cbox(0, 0.5, 0, 9.5, 0.7, 9.5, C.metal); x.cbox(0, 1.2, 0, 6.5, 0.5, 6.5, C.metal); x.cbox(0, 1.7, 0, 3.2, 1.3, 3.2, C.glass);
+      m.cbox(1, 0, -1, 9, 0.08, 9, [.16, .14, .13]); m.cbox(2, 0, 0, 5, 0.12, 6, [.1, .09, .09]);
+      for (const [a, b] of [[5, 4], [-3, 6], [6, -3], [-6, -4]]) g.cbox(a, 0, b, 0.5, 0.4, 0.5, [.5, 1, .6]);
+      o.push([0, 0, 4.4]);
+    } },
+  { id: 'camp', name: 'Embers Camp', lore: 'The fire is warm. Whoever lit it just stepped out.', hint: 'Follow the smell of woodsmoke among the trees.',
+    pad: 8, flat: 3.5, want: b => b === FOREST,
+    build(m, g, x, o) {
+      for (let i = 0; i < 6; i++) m.cbox(-3, i * 0.45, -1, 3.6 - i * 0.6, 0.45, 4, i % 2 ? [.9, .45, .1] : C.orange);
+      m.cbox(-3, 0, 1.02, 1, 1.3, 0.05, C.black);
+      for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; m.cbox(2 + Math.cos(a) * 0.9, 0, 1 + Math.sin(a) * 0.9, 0.45, 0.3, 0.45, C.dstone); }
+      m.cbox(2, 0, 1, 1.2, 0.25, 0.3, C.dwood); m.cbox(2, 0, 1, 0.3, 0.25, 1.2, C.dwood);
+      g.cbox(2, 0.25, 1, 0.6, 0.7, 0.6, [1, .55, .1]); g.cbox(2, 0.95, 1, 0.3, 0.5, 0.3, [1, .85, .3]);
+      m.cbox(2, 0, 3.4, 2.4, 0.6, 0.7, C.wood);
+      m.cbox(-0.5, 0, 3, 0.2, 2.2, 0.2, C.dwood); g.cbox(-0.5, 2.2, 3, 0.4, 0.4, 0.4, [1, .9, .5]);
+      m.cbox(4.5, 0, -2, 1, 1, 1, C.card); m.cbox(4.6, 1, -2.1, 0.8, 0.8, 0.8, C.card);
+      o.push([-3, -1, 2.1], [2, 1, 1.0], [2, 3.4, 1.0], [4.5, -2, 0.8]);
+    } },
+  { id: 'barn', name: 'Red Barn Farm', lore: 'Hay for horses nobody has seen.', hint: 'Red paint, yellow hay, green fields.',
+    pad: 12, flat: 4, want: b => b === GRASS,
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 8, 4.5, 10, C.red); m.cbox(0, 4.5, 0, 8.4, 0.3, 10.4, C.white);
+      for (let i = 0; i < 4; i++) m.cbox(0, 4.8 + i * 0.8, 0, 8.4 - i * 2, 0.8, 10.6, C.roof);
+      m.cbox(0, 0, 5.02, 3, 3.4, 0.1, C.white); m.cbox(0, 0.15, 5.06, 2.6, 3.1, 0.1, [.5, .12, .1]);
+      m.cbox(6.5, 0, -2, 3, 9, 3, C.metal); m.cbox(6.5, 9, -2, 2.4, 0.7, 2.4, C.dmetal); m.cbox(6.5, 9.7, -2, 1.4, 0.5, 1.4, C.dmetal);
+      m.cbox(-6, 0, 3, 1.6, 1.2, 1.2, C.hay); m.cbox(-6, 0, 4.4, 1.6, 1.2, 1.2, C.hay); m.cbox(-6, 1.2, 3.7, 1.6, 1.2, 1.2, C.hay);
+      o.push([0, -2.5, 4.4], [0, 2.5, 4.4], [6.5, -2, 2], [-6, 3.7, 1.4]);
+    } },
+  { id: 'henge', name: 'Counting Stones', lore: 'Eight stones. Count again and it is nine.', hint: 'A ring of stones on a rise.',
+    pad: 10, flat: 4, want: (b, alt) => (b === GRASS || b === ROCK) && alt >= 18,
+    build(m, g, x, o) {
+      const P = [];
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, px = Math.cos(a) * 6.5, pz = Math.sin(a) * 6.5; P.push([px, pz]); m.cbox(px, 0, pz, 1.3, 3.6, 1.3, jit(C.stone, 0.2, (k * 0.61) % 1)); o.push([px, pz, 0.8]); }
+      for (const k of [0, 2, 5]) for (let t = 0; t <= 1.001; t += 0.2) m.cbox(lerp(P[k][0], P[k + 1][0], t), 3.6, lerp(P[k][1], P[k + 1][1], t), 1.3, 0.7, 1.3, C.dstone);
+      m.cbox(0, 0, 0, 2.2, 0.9, 1.4, C.dstone); g.cbox(0, 0.9, 0, 0.3, 0.3, 0.3, [.6, .8, 1]);
+      o.push([0, 0, 1.2]);
+    } },
+  { id: 'snowman', name: 'Old Snowy', lore: 'Built by someone very tall, or very patient.', hint: 'He wears a very large hat in the far cold.',
+    pad: 8, flat: 3.5, want: b => b === SNOW,
+    build(m, g, x, o) {
+      m.cbox(0, 0, 0, 5, 4, 5, C.snow); m.cbox(0, 4, 0, 3.8, 3, 3.8, C.snow); m.cbox(0, 7, 0, 2.6, 2.4, 2.6, C.snow);
+      m.cbox(-0.6, 8.3, 1.3, 0.35, 0.35, 0.15, C.black); m.cbox(0.6, 8.3, 1.3, 0.35, 0.35, 0.15, C.black); m.cbox(0, 7.8, 1.7, 0.35, 0.35, 1, C.orange);
+      for (let k = 0; k < 3; k++) m.cbox(0, 4.6 + k * 0.8, 1.9, 0.3, 0.3, 0.15, C.black);
+      m.cbox(0, 6.8, 0, 3, 0.5, 3, C.red); m.cbox(1, 5.6, 1.55, 0.6, 1.3, 0.2, C.red);
+      m.cbox(0, 9.4, 0, 3.2, 0.3, 3.2, C.black); m.cbox(0, 9.7, 0, 2, 1.8, 2, C.black); m.cbox(0, 9.7, 0, 2.1, 0.4, 2.1, C.red);
+      m.cbox(-3.4, 5.5, 0, 3, 0.3, 0.3, C.dwood); m.cbox(3.4, 5.8, 0, 3, 0.3, 0.3, C.dwood);
+      o.push([0, 0, 3.2]);
+    } },
+];
+
+// ───────────────────────── placement ─────────────────────────
+let spawn = { x: 0, z: 0, h: 0 };
+const crates = [];
+const lmObs = [];
+function placeWorld() {
+  const rng = mulberry32(SEED * 7 + 3);
+  // spawn: flat grass, away from the peaks
+  for (let i = 0; i < 4000; i++) {
+    const a = rng() * 6.2832, rr = (0.15 + rng() * 0.4) * R, x = Math.round(Math.cos(a) * rr), z = Math.round(Math.sin(a) * rr);
+    const hr = rawHeight(x + .5, z + .5), h = Math.floor(hr), alt = h - SEA;
+    if (alt < 2 || alt > 18) continue;
+    if (i < 3000 && biomeAt(x, z, h) !== GRASS) continue;
+    if (Math.abs(rawHeight(x + 8, z) - hr) > 3 || Math.abs(rawHeight(x, z + 8) - hr) > 3) continue;
+    spawn = { x: x + .5, z: z + .5, h: 0 }; break;
+  }
+  const placed = [];
+  for (const def of LM_DEFS) {
+    let best = null;
+    for (let pass = 0; pass < 2 && !best; pass++) {
+      for (let i = 0; i < 4000; i++) {
+        const a = rng() * 6.2832, rr = Math.sqrt(rng()) * R * 0.9, x = Math.round(Math.cos(a) * rr), z = Math.round(Math.sin(a) * rr);
+        const hr = rawHeight(x + .5, z + .5), h = Math.floor(hr), alt = h - SEA;
+        if (alt < 1) continue;
+        if (Math.hypot(x - spawn.x, z - spawn.z) < 95) continue;
+        const minD = pass === 0 ? 185 : 110;
+        if (placed.some(p => Math.hypot(p.x - x, p.z - z) < minD)) continue;
+        if (pass === 0) {
+          if (!def.want(biomeAt(x, z, h), alt, x, z)) continue;
+          let flat = true;
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (Math.abs(rawHeight(x + dx * def.pad, z + dz * def.pad) - hr) > def.flat * 1.5) flat = false;
+          if (!flat) continue;
+        }
+        best = { x: x + .5, z: z + .5, y: h, ok: pass === 0 }; break;
+      }
+    }
+    if (!best) best = { x: spawn.x + 90 + placed.length * 9, z: spawn.z, y: Math.max(SEA + 1, Math.floor(rawHeight(spawn.x + 90, spawn.z))), ok: false };
+    placed.push({ def, id: def.id, x: best.x, z: best.z, y: best.y, pad: def.pad, ok: best.ok, found: false });
+  }
+  for (const p of placed) landmarks.push(p);
+  for (const lm of landmarks) lm.where = sectorName(lm.x, lm.z);
+  // lost parcels
+  const rc = mulberry32(SEED * 13 + 5);
+  for (let i = 0; i < 20000 && crates.length < 30; i++) {
+    const a = rc() * 6.2832, rr = Math.sqrt(rc()) * R * 0.92, x = Math.round(Math.cos(a) * rr), z = Math.round(Math.sin(a) * rr);
+    const h = top(x, z);
+    if (h - SEA < 1) continue;
+    if (landmarks.some(l => Math.hypot(l.x - x, l.z - z) < l.pad + 12)) continue;
+    if (crates.some(c => Math.hypot(c.x - x, c.z - z) < 85)) continue;
+    if (Math.hypot(x - spawn.x, z - spawn.z) < 25) continue;
+    crates.push({ x: x + .5, z: z + .5, y: h, got: false });
+  }
+  spawn.h = Math.atan2(-spawn.x, -spawn.z);   // face the middle of the island
+}
+placeWorld();
+
+// ───────────────────────── GL setup ─────────────────────────
+const canvas = $('gl');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+if (!gl) { $('nogl').classList.add('on'); $('ovStart').classList.remove('on'); return; }
+
+function prog(vs, fs) {
+  const p = gl.createProgram();
+  for (const [t, s] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    gl.attachShader(p, sh);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name; u[nm] = gl.getUniformLocation(p, nm); }
+  return { p, u };
+}
+const MAIN = prog(`#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aCol; layout(location=2) in float aN;
+uniform mat4 uVP, uModel;
+uniform vec3 uSun, uSunCol, uAmb, uSkyAmb, uTint, uLampPos, uLampDir;
+uniform float uLamp, uEmis, uWave, uTime, uCut;
+out vec3 vCol; out vec3 vW; out float vCut;
+const vec3 NRM[6] = vec3[6](vec3(1.,0.,0.),vec3(-1.,0.,0.),vec3(0.,1.,0.),vec3(0.,-1.,0.),vec3(0.,0.,1.),vec3(0.,0.,-1.));
+void main(){
+  vec4 w = uModel * vec4(aPos, 1.);
+  if (uWave > 0.5) w.y += sin(w.x * 0.55 + uTime * 1.4) * 0.07 + cos(w.z * 0.45 + uTime * 1.1) * 0.07;
+  float nn = aN, cf = step(7.5, nn); nn -= 8. * cf; vCut = max(cf, uCut);
+  vec3 n = normalize(mat3(uModel) * NRM[int(nn + 0.5)]);
+  vec3 light = uAmb + uSkyAmb * (n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSun), 0.);
+  vec3 L = w.xyz - uLampPos; float dl = length(L);
+  float cone = dot(L / max(dl, 0.001), uLampDir);
+  light += vec3(1., .88, .62) * uLamp * smoothstep(0.80, 0.97, cone) * clamp(1. - dl / 46., 0., 1.) * 1.1;
+  light = mix(light, vec3(1.), uEmis);
+  vCol = aCol * uTint * light; vW = w.xyz;
+  gl_Position = uVP * w;
+}`, `#version 300 es
+precision highp float;
+in vec3 vCol; in vec3 vW; in float vCut;
+uniform vec3 uCam, uFogCol, uCar; uniform vec2 uFog; uniform float uAlpha, uFogMode;
+out vec4 o;
+void main(){
+  if (vCut > 0.5 && vW.y > uCar.y + 1.2) {
+    vec3 ab = uCar - uCam; float t = dot(vW - uCam, ab) / dot(ab, ab);
+    float dl = t < 0.88 ? distance(vW, uCam + ab * clamp(t, 0., 1.)) : 99.;
+    dl = min(dl, distance(vW, uCam) * 0.45);
+    if (dl < 2.2 || (dl < 3.0 && mod(floor(gl_FragCoord.x) + floor(gl_FragCoord.y), 2.) < 1.)) discard;
+  }
+  float f = clamp((distance(vW.xz, uCam.xz) - uFog.x) / (uFog.y - uFog.x), 0., 1.); f = f * f * (3. - 2. * f);
+  vec3 c = uFogMode < 0.5 ? mix(vCol, uFogCol, f) : vCol * (1. - f);
+  o = vec4(c, uAlpha);
+}`);
+const SKY = prog(`#version 300 es
+out vec2 vP;
+const vec2 P[3] = vec2[3](vec2(-1.,-1.), vec2(3.,-1.), vec2(-1.,3.));
+void main(){ vP = P[gl_VertexID]; gl_Position = vec4(vP, 0.999, 1.); }`, `#version 300 es
+precision highp float;
+in vec2 vP;
+uniform vec3 uR, uU, uF, uZen, uHor, uSunDir, uSunDisc, uMoonDir; uniform vec2 uTan; uniform float uNight;
+out vec4 o;
+void main(){
+  vec3 d = normalize(uF + vP.x * uTan.x * uR + vP.y * uTan.y * uU);
+  vec3 c = mix(uHor, uZen, smoothstep(0.0, 0.6, d.y));
+  float s = max(dot(d, uSunDir), 0.);
+  c += uSunDisc * (pow(s, 700.) * 1.6 + pow(s, 14.) * 0.2);
+  float m = max(dot(d, uMoonDir), 0.);
+  c += vec3(.85, .9, 1.) * pow(m, 1200.) * uNight;
+  vec3 q = floor(d * 150.);
+  float h = fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  c += vec3(step(0.9972, h)) * uNight * smoothstep(0.05, 0.35, d.y) * 0.9;
+  o = vec4(c, 1.);
+}`);
+const emptyVAO = gl.createVertexArray();
+
+function makeMesh(mb) {
+  if (!mb || !mb.i.length) return null;
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mb.v), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 28, 12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 28, 24);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(mb.i), gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, vb, ib, count: mb.i.length };
+}
+function freeMesh(m) { if (!m) return; gl.deleteBuffer(m.vb); gl.deleteBuffer(m.ib); gl.deleteVertexArray(m.vao); }
+
+// ───────────────────────── chunks ─────────────────────────
+const FLOWERS = [[.95, .3, .35], [.98, .85, .3], [.9, .9, .95], [.7, .45, .9], [.98, .6, .2]];
+function decoOak(mb, x, y, z, r) {
+  const th = 3 + Math.floor(r * 2.99), r2 = (r * 7.13) % 1;
+  mb.box(x + .3, y, z + .3, x + .7, y + th, z + .7, jit(C.wood, .2, r2));
+  const lc = r2 > 0.93 ? [.85, .55, .15] : r2 > 0.86 ? [.8, .72, .2] : jit(C.leaf, .3, r2);
+  if (r > 0.55) mb.box(x - 2, y + th, z - 2, x + 3, y + th + 1, z + 3, lc);
+  mb.box(x - 1, y + th + (r > 0.55 ? 1 : 0), z - 1, x + 2, y + th + 2, z + 2, jit(lc, .12, r));
+  mb.box(x, y + th + 2, z, x + 1, y + th + 3, z + 1, lc);
+}
+function decoPine(mb, x, y, z, r, snowy) {
+  const lc = jit([.16, .4, .26], .25, (r * 5.7) % 1), s = C.snow;
+  mb.box(x + .32, y, z + .32, x + .68, y + 2, z + .68, C.dwood);
+  mb.box(x - 2, y + 2, z - 2, x + 3, y + 3, z + 3, lc);
+  mb.box(x - 1, y + 3, z - 1, x + 2, y + 5, z + 2, lc);
+  mb.box(x, y + 5, z, x + 1, y + 7, z + 1, lc);
+  if (snowy) { mb.box(x - 2, y + 3, z - 2, x + 3, y + 3.2, z + 3, s); mb.box(x - 1, y + 5, z - 1, x + 2, y + 5.2, z + 2, s); mb.box(x, y + 7, z, x + 1, y + 7.2, z + 1, s); }
+}
+function decoCactus(mb, x, y, z, r) {
+  const c = jit([.3, .58, .3], .2, r), h = 2 + Math.floor(r * 2.99);
+  mb.box(x + .25, y, z + .25, x + .75, y + h, z + .75, c);
+  mb.box(x + .75, y + 1.1, z + .35, x + 1.25, y + 1.5, z + .65, c); mb.box(x + 1.0, y + 1.5, z + .35, x + 1.25, y + 2.3, z + .65, c);
+  if (r > .5) { mb.box(x - .25, y + 1.5, z + .35, x + .25, y + 1.9, z + .65, c); mb.box(x - .25, y + 1.9, z + .35, x, y + 2.6, z + .65, c); }
+}
+function decoPalm(mb, x, y, z, r) {
+  const h = 5 + Math.floor(r * 2.5), lc = jit([.3, .62, .25], .2, r);
+  mb.box(x + .32, y, z + .32, x + .68, y + h, z + .68, [.6, .47, .3]);
+  mb.box(x - 2, y + h, z + .2, x + 3, y + h + .3, z + .8, lc); mb.box(x + .2, y + h, z - 2, x + .8, y + h + .3, z + 3, lc);
+  mb.box(x - 2.4, y + h - .5, z + .25, x - 1.6, y + h, z + .75, lc); mb.box(x + 2.6, y + h - .5, z + .25, x + 3.4, y + h, z + .75, lc);
+  mb.box(x + .25, y + h - .5, z - 2.4, x + .75, y + h, z - 1.6, lc); mb.box(x + .25, y + h - .5, z + 2.6, x + .75, y + h, z + 3.4, lc);
+}
+function decoRock(mb, x, y, z, r) { mb.box(x + .1, y, z + .15, x + .9, y + .45 + r * .5, z + .85, jit(C.stone, .25, (r * 3.3) % 1)); }
+function decoBoulder(mb, x, y, z, r, snowy) {
+  const c = jit(C.stone, .25, (r * 3.3) % 1);
+  mb.box(x - .2, y, z - .1, x + 1.5, y + 1.3, z + 1.4, c); mb.box(x + .9, y, z + .8, x + 2.1, y + .8, z + 1.9, jit(c, .2, r));
+  if (snowy) mb.box(x - .2, y + 1.3, z - .1, x + 1.5, y + 1.45, z + 1.4, C.snow);
+}
+function decoBush(mb, x, y, z, r, col) { mb.box(x + .1, y, z + .1, x + .9, y + .45 + r * .35, z + .9, col); }
+function decoShroom(mb, x, y, z) {
+  const red = [.9, .16, .14], w = [.97, .95, .9];
+  mb.box(x + .1, y, z + .1, x + .9, y + 1, z + .9, w);
+  mb.box(x - .8, y + 1, z - .8, x + 1.8, y + 1.7, z + 1.8, red); mb.box(x - .3, y + 1.7, z - .3, x + 1.3, y + 2, z + 1.3, red);
+  mb.box(x - .6, y + 1.7, z - .6, x - .2, y + 1.77, z - .2, w); mb.box(x + 1.2, y + 1.7, z + 1.1, x + 1.6, y + 1.77, z + 1.5, w);
+  mb.box(x + 1.1, y + 1.7, z - .6, x + 1.5, y + 1.77, z - .25, w); mb.box(x + .3, y + 2, z + .3, x + .7, y + 2.07, z + .7, w);
+}
+// what the truck can do to each kind of scenery: knock = speed needed to flatten it, bh = bump height when rolled over
+const DECO = {
+  oak: { build: decoOak, r: .35, ox: .5, knock: 5, mass: .1, stump: C.wood, bits: C.leaf },
+  pine: { build: decoPine, r: .35, ox: .5, knock: 5, mass: .1, stump: C.dwood, bits: [.16, .4, .26] },
+  palm: { build: decoPalm, r: .35, ox: .5, knock: 5, mass: .08, stump: [.6, .47, .3], bits: [.3, .62, .25] },
+  cactus: { build: decoCactus, r: .4, ox: .5, knock: 3.5, mass: .05, stump: [.3, .58, .3], bits: [.3, .58, .3] },
+  bush: { build: decoBush, r: .45, ox: .5, bits: C.leaf2 },
+  rock: { build: decoRock, r: .55, ox: .5, roll: 8, bh: s => .45 + s * .5 },
+  boulder: { build: decoBoulder, r: 1.15, ox: .8, roll: 18, bh: () => 1.3 },
+  shroom: { build: decoShroom, r: 1.3, ox: .5 },
+};
+const felled = new Set(), dirty = new Set(), props = [], bumps = [];
+
+function buildChunk(cx, cz) {
+  const ox = cx * CH, oz = cz * CH, W = CH + 2, hm = new Int16Array(W * W);
+  for (let z = -1; z <= CH; z++) for (let x = -1; x <= CH; x++) hm[(z + 1) * W + x + 1] = top(ox + x, oz + z);
+  const g = (x, z) => hm[(z + 1) * W + x + 1];
+  const mb = new MB(), wb = new MB(), obs = [];
+  const near = landmarks.filter(l => Math.abs(l.x - ox - 8) < l.pad + 20 && Math.abs(l.z - oz - 8) < l.pad + 20);
+  const AO = [0.58, 0.74, 0.88, 1];
+  const ao = (s1, s2, c) => AO[(s1 && s2) ? 0 : 3 - (s1 + s2 + c)];
+  for (let z = 0; z < CH; z++) for (let x = 0; x < CH; x++) {
+    const wx = ox + x, wz = oz + z, h = g(x, z), b = biomeAt(wx, wz, h), rnd = hash2(wx, wz, 101);
+    mb.flag = 0;
+    const tc = TOPC[b], k = 0.92 + rnd * 0.16;
+    const n = g(x, z - 1) > h, s = g(x, z + 1) > h, w = g(x - 1, z) > h, e = g(x + 1, z) > h;
+    const a00 = ao(w, n, g(x - 1, z - 1) > h), a01 = ao(w, s, g(x - 1, z + 1) > h), a11 = ao(e, s, g(x + 1, z + 1) > h), a10 = ao(e, n, g(x + 1, z - 1) > h);
+    mb.quad(wx, h, wz, wx, h, wz + 1, wx + 1, h, wz + 1, wx + 1, h, wz, tc[0] * k, tc[1] * k, tc[2] * k, 2, a00, a01, a11, a10, a00 + a11 > a01 + a10);
+    // sides
+    for (let d = 0; d < 4; d++) {
+      const dx = d === 0 ? 1 : d === 1 ? -1 : 0, dz = d === 2 ? 1 : d === 3 ? -1 : 0, nh = g(x + dx, z + dz);
+      if (nh >= h) continue;
+      for (let y = h - 1; y >= nh; y--) {
+        let y0 = y; const depth = h - 1 - y;
+        if (depth >= 5) y0 = nh;
+        const sc = depth === 0 || b === DESERT || b === BEACH ? SIDEC[b] : depth === 1 && b !== SNOW ? SIDEC[b] : DEEPC;
+        const kk = 0.9 + hash2(wx + y * 31, wz + d * 7, 5) * 0.2, lo = y0 === nh ? 0.72 : 1;
+        const r = sc[0] * kk, gg = sc[1] * kk, bb = sc[2] * kk;
+        if (d === 0) mb.quad(wx + 1, y0, wz, wx + 1, y + 1, wz, wx + 1, y + 1, wz + 1, wx + 1, y0, wz + 1, r, gg, bb, 0, lo, 1, 1, lo);
+        else if (d === 1) mb.quad(wx, y0, wz, wx, y + 1, wz, wx, y + 1, wz + 1, wx, y0, wz + 1, r, gg, bb, 1, lo, 1, 1, lo);
+        else if (d === 2) mb.quad(wx, y0, wz + 1, wx + 1, y0, wz + 1, wx + 1, y + 1, wz + 1, wx, y + 1, wz + 1, r, gg, bb, 4, lo, lo, 1, 1);
+        else mb.quad(wx, y0, wz, wx + 1, y0, wz, wx + 1, y + 1, wz, wx, y + 1, wz, r, gg, bb, 5, lo, lo, 1, 1);
+        if (y0 === nh) break;
+      }
+    }
+    if (h < SEA) {
+      const dp = clamp((SEA - h) / 6, 0, 1), wr = lerp(.36, .1, dp), wg = lerp(.74, .36, dp), wbl = lerp(.84, .66, dp);
+      wb.quad(wx, WATER, wz, wx, WATER, wz + 1, wx + 1, WATER, wz + 1, wx + 1, WATER, wz, wr, wg, wbl, 2);
+      continue;
+    }
+    // decorations
+    let skip = Math.hypot(wx - spawn.x, wz - spawn.z) < 6;
+    for (const l of near) if (Math.hypot(wx + .5 - l.x, wz + .5 - l.z) < l.pad + 2.5) skip = true;
+    if (skip) continue;
+    const r2 = hash2(wx, wz, 202), r3 = hash2(wx, wz, 303), gone = felled.has(wx + ',' + wz);
+    mb.flag = 8;
+    const put = (kind, seed, opt) => {
+      const D = DECO[kind];
+      if (gone) { if (D.stump) mb.box(wx + .3, h, wz + .3, wx + .7, h + .3, wz + .7, D.stump); return; }
+      D.build(mb, wx, h, wz, seed, opt);
+      obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt, cx, cz, bh: D.bh ? D.bh(seed) : 0 });
+    };
+    const rockKind = r3 > 0.7 ? 'boulder' : 'rock';
+    if (b === FOREST) {
+      if (r2 < 0.016) (r3 < 0.3 ? put('pine', r3 / 0.3, false) : put('oak', r3));
+      else if (r2 < 0.034) put('bush', r3, jit(C.leaf2, .3, r3));
+      else if (r2 < 0.043) { mb.box(wx + .42, h, wz + .42, wx + .58, h + .3, wz + .58, C.cream); mb.box(wx + .25, h + .3, wz + .25, wx + .75, h + .5, wz + .75, [.8, .2, .2]); }
+      else if (r2 < 0.046) put('shroom', r3);
+    } else if (b === GRASS) {
+      if (r2 < 0.006) put('oak', r3);
+      else if (r2 < 0.012) put('bush', r3, jit(C.leaf2, .3, r3));
+      else if (r2 < 0.045) { mb.box(wx + .45, h, wz + .45, wx + .55, h + .35, wz + .55, C.leaf); mb.box(wx + .34, h + .35, wz + .34, wx + .66, h + .62, wz + .66, FLOWERS[Math.floor(r3 * 4.99)]); }
+      else if (r2 < 0.049) put(rockKind, r3, false);
+      else if (r2 < 0.12) mb.box(wx + .3 + r3 * .3, h, wz + .4, wx + .42 + r3 * .3, h + .28 + r3 * .2, wz + .52, jit([.3, .56, .22], .3, r3));
+      else if (r2 < 0.1228) put('shroom', r3);
+    } else if (b === DESERT) {
+      if (r2 < 0.005) put('cactus', r3);
+      else if (r2 < 0.012) put(rockKind, r3, false);
+      else if (r2 < 0.021) put('bush', r3 * 0.3, [.62, .52, .3]);
+      else if (r2 < 0.0225) put('shroom', r3);
+    } else if (b === SNOW) {
+      if (r2 < 0.009) put('pine', r3, true);
+      else if (r2 < 0.019) put(rockKind, r3, true);
+      else if (r2 < 0.0205) put('shroom', r3);
+    } else if (b === BEACH) {
+      if (r2 < 0.008) put('palm', r3);
+      else if (r2 < 0.013) put('rock', r3 * 0.69, false);
+    } else if (b === ROCK) {
+      if (r2 < 0.014) put(rockKind, r3, false);
+    }
+  }
+  return { cx, cz, mesh: makeMesh(mb), water: makeMesh(wb), obs };
+}
+const chunks = new Map(); let queue = [], lastCC = '';
+const ckey = (cx, cz) => cx + ',' + cz;
+function planChunks(ccx, ccz) {
+  queue = [];
+  for (let dz = -RD; dz <= RD; dz++) for (let dx = -RD; dx <= RD; dx++) {
+    if (dx * dx + dz * dz > RD * RD + 2) continue;
+    if (!chunks.has(ckey(ccx + dx, ccz + dz))) queue.push([dx * dx + dz * dz, ccx + dx, ccz + dz]);
+  }
+  queue.sort((a, b) => b[0] - a[0]);
+  for (const [k, c] of chunks) if (Math.abs(c.cx - ccx) > RD + 2 || Math.abs(c.cz - ccz) > RD + 2) { freeMesh(c.mesh); freeMesh(c.water); chunks.delete(k); }
+}
+function pumpChunks(ms) {
+  const t0 = performance.now();
+  while (queue.length) {
+    const [, cx, cz] = queue.pop(), k = ckey(cx, cz);
+    if (!chunks.has(k)) chunks.set(k, buildChunk(cx, cz));
+    if (performance.now() - t0 > ms) break;
+  }
+}
+
+// ───────────────────────── models ─────────────────────────
+for (const lm of landmarks) {
+  const m = new MB(), g = new MB(), x = new MB(), o = [];
+  lm.def.build(m, g, x, o);
+  lm.mesh = makeMesh(m); lm.glow = makeMesh(g); lm.extra = makeMesh(x);
+  for (const [dx, dz, r] of o) lmObs.push({ x: lm.x + dx, z: lm.z + dz, r, kind: 'solid' });
+}
+const carMesh = (() => {
+  const m = new MB(), g = new MB(), w = new MB(); m.lo = g.lo = 0.92; w.lo = 0.8;
+  const body = [.93, .36, .12], cream = [.95, .92, .84], dark = [.16, .17, .2], glass = [.2, .32, .45], grey = [.5, .52, .56];
+  m.box(-.85, .7, -2.1, .85, .95, 2.1, dark);
+  m.box(-1, .95, -2.2, 1, 1.6, 2.2, body);
+  m.box(-1.02, 1.18, -2.22, 1.02, 1.3, 2.22, cream);
+  m.box(-.95, 1.6, -1, .95, 2.35, .7, body);
+  m.box(-.85, 1.68, .7, .85, 2.25, .76, glass); m.box(-.85, 1.68, -1.06, .85, 2.25, -1, glass);
+  m.box(-.97, 1.68, -.8, -.95, 2.25, .5, glass); m.box(.95, 1.68, -.8, .97, 2.25, .5, glass);
+  m.box(-1, 2.35, -1.05, 1, 2.47, .75, cream);
+  m.box(-.5, 2.47, -.85, .5, 2.95, .15, C.card); m.box(-.06, 2.47, -.87, .06, 2.97, .17, cream);
+  m.box(-1.1, .75, 2.2, 1.1, 1.05, 2.42, grey); m.box(-1.1, .75, -2.4, 1.1, 1.05, -2.2, grey);
+  m.box(-.7, 1.05, 2.3, -.58, 1.55, 2.4, dark); m.box(.58, 1.05, 2.3, .7, 1.55, 2.4, dark); m.box(-.7, 1.45, 2.3, .7, 1.55, 2.4, dark);
+  m.box(-.45, 1.05, -2.5, .45, 1.95, -2.2, dark); m.box(-.2, 1.3, -2.54, .2, 1.7, -2.5, grey);
+  for (const sx of [-1, 1]) for (const sz of [-1.45, 1.45]) m.box(sx * 1.0 - .12 + (sx > 0 ? .12 : -.12), 1.3, sz - .75, sx * 1.0 + .12 + (sx > 0 ? .12 : -.12), 1.42, sz + .75, dark);
+  g.box(-.92, 1.22, 2.2, -.55, 1.52, 2.26, [1, .95, .7]); g.box(.55, 1.22, 2.2, .92, 1.52, 2.26, [1, .95, .7]);
+  g.box(-.92, 1.25, -2.26, -.62, 1.5, -2.2, [.9, .12, .1]); g.box(.62, 1.25, -2.26, .92, 1.5, -2.2, [.9, .12, .1]);
+  g.box(-.6, 2.47, .45, .6, 2.6, .65, [1, .9, .55]);
+  w.box(-.28, -.6, -.6, .28, .6, .6, [.12, .12, .14]); w.box(-.31, -.25, -.25, .31, .25, .25, [.72, .72, .75]);
+  return { body: makeMesh(m), glow: makeMesh(g), wheel: makeMesh(w) };
+})();
+const WHEELS = [[1.05, 1.45], [-1.05, 1.45], [1.05, -1.45], [-1.05, -1.45]];
+const crateMesh = (() => { const m = new MB(); m.box(-.5, -.5, -.5, .5, .5, .5, C.card); m.box(-.52, -.08, -.52, .52, .08, .52, C.cream); m.box(-.08, -.52, -.52, .08, .52, .52, C.cream); return makeMesh(m); })();
+const cubeMesh = (() => { const m = new MB(); m.lo = 1; m.box(-.5, -.5, -.5, .5, .5, .5, [1, 1, 1]); return makeMesh(m); })();
+const shadowMesh = (() => { const m = new MB(); m.quad(-1.25, 0, -2.5, -1.25, 0, 2.5, 1.25, 0, 2.5, 1.25, 0, -2.5, 1, 1, 1, 2); return makeMesh(m); })();
+const beamMesh = (() => {
+  const m = new MB(), a = 0.7, H = 80;
+  m.quad(a, 0, -a, a, H, -a, a, H, a, a, 0, a, 1, 1, 1, 0, 1, 0, 0, 1);
+  m.quad(-a, 0, -a, -a, H, -a, -a, H, a, -a, 0, a, 1, 1, 1, 1, 1, 0, 0, 1);
+  m.quad(-a, 0, a, a, 0, a, a, H, a, -a, H, a, 1, 1, 1, 4, 1, 1, 0, 0);
+  m.quad(-a, 0, -a, a, 0, -a, a, H, -a, -a, H, -a, 1, 1, 1, 5, 1, 1, 0, 0);
+  return makeMesh(m);
+})();
+const CLOUD_P = 640;
+const cloudMesh = (() => {
+  const m = new MB(), r = mulberry32(SEED + 99); m.lo = 0.88;
+  for (let i = 0; i < 46; i++) {
+    const x = r() * CLOUD_P, z = (r() - .5) * 1900, y = 135 + r() * 30, n = 2 + Math.floor(r() * 4);
+    for (let k = 0; k < n; k++) m.cbox(x + (r() - .5) * 22, y + (r() - .5) * 3, z + (r() - .5) * 16, 12 + r() * 18, 3 + r() * 3, 10 + r() * 12, [1, 1, 1]);
+  }
+  return makeMesh(m);
+})();
+
+// ───────────────────────── minimap data ─────────────────────────
+const MAPN = 256, MAPS = 6, MAPO = -768;
+const mapCv = document.createElement('canvas'); mapCv.width = mapCv.height = MAPN;
+const fogCv = document.createElement('canvas'); fogCv.width = fogCv.height = MAPN;
+const fctx = fogCv.getContext('2d', { willReadFrequently: true });
+const GN = 64, GC = 24, REVEAL = 62;
+const landGrid = new Uint8Array(GN * GN), expl = new Uint8Array(GN * GN);
+let landTotal = 0, explLand = 0;
+(function buildMap() {
+  const ctx = mapCv.getContext('2d', { willReadFrequently: true }), img = ctx.createImageData(MAPN, MAPN), d = img.data;
+  const hs = new Float32Array(MAPN * MAPN);
+  for (let py = 0; py < MAPN; py++) for (let px = 0; px < MAPN; px++) hs[py * MAPN + px] = heightF(MAPO + px * MAPS + 2, MAPO + py * MAPS + 2);
+  for (let py = 0; py < MAPN; py++) for (let px = 0; px < MAPN; px++) {
+    const i = py * MAPN + px, h = Math.floor(hs[i]), wx = MAPO + px * MAPS + 2, wz = MAPO + py * MAPS + 2;
+    let c;
+    if (h < SEA) { const dp = clamp((SEA - h) / 7, 0, 1); c = [lerp(.38, .1, dp), lerp(.72, .3, dp), lerp(.84, .6, dp)]; }
+    else {
+      const b = biomeAt(wx, wz, h), sh = clamp(0.92 + (hs[i] - hs[Math.max(0, i - MAPN - 1)]) * 0.09, 0.62, 1.25);
+      c = [TOPC[b][0] * sh, TOPC[b][1] * sh, TOPC[b][2] * sh];
+    }
+    d[i * 4] = clamp(c[0], 0, 1) * 255; d[i * 4 + 1] = clamp(c[1], 0, 1) * 255; d[i * 4 + 2] = clamp(c[2], 0, 1) * 255; d[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  for (let gz = 0; gz < GN; gz++) for (let gx = 0; gx < GN; gx++) {
+    const px = (gx * GC + GC / 2) / MAPS | 0, py = (gz * GC + GC / 2) / MAPS | 0;
+    if (hs[py * MAPN + px] >= SEA) { landGrid[gz * GN + gx] = 1; landTotal++; }
+  }
+  fctx.fillStyle = '#0b1322'; fctx.fillRect(0, 0, MAPN, MAPN);
+})();
+function punch(px, py, r) {
+  fctx.globalCompositeOperation = 'destination-out';
+  const g = fctx.createRadialGradient(px, py, r * 0.55, px, py, r);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  fctx.fillStyle = g; fctx.beginPath(); fctx.arc(px, py, r, 0, 7); fctx.fill();
+  fctx.globalCompositeOperation = 'source-over';
+}
+let lastRev = [1e9, 1e9];
+function reveal(x, z) {
+  if (Math.hypot(x - lastRev[0], z - lastRev[1]) < 5) return;
+  lastRev = [x, z];
+  punch((x - MAPO) / MAPS, (z - MAPO) / MAPS, REVEAL / MAPS);
+  const g0x = Math.floor((x - REVEAL - MAPO) / GC), g1x = Math.floor((x + REVEAL - MAPO) / GC), g0z = Math.floor((z - REVEAL - MAPO) / GC), g1z = Math.floor((z + REVEAL - MAPO) / GC);
+  for (let gz = Math.max(0, g0z); gz <= Math.min(GN - 1, g1z); gz++) for (let gx = Math.max(0, g0x); gx <= Math.min(GN - 1, g1x); gx++) {
+    const i = gz * GN + gx;
+    if (expl[i]) continue;
+    if (Math.hypot(MAPO + gx * GC + GC / 2 - x, MAPO + gz * GC + GC / 2 - z) > REVEAL) continue;
+    expl[i] = 1; if (landGrid[i]) explLand++;
+  }
+}
+
+// ───────────────────────── game state ─────────────────────────
+const MAXV = 27, BOOSTV = 38, ACC = 20, GRAV = 26, SLOPE = 10.5;
+const car = { x: spawn.x, z: spawn.z, y: 0, vy: 0, h: spawn.h, vx: 0, vz: 0, pitch: 0, roll: 0, steer: 0, spin: 0, g: 0, hs: 0, air: 0, biome: GRASS, vF: 0,
+  pop: 0, sy: 0, sv: 0, pv: 0, rv: 0, gp: 0, gr: 0, flip: 0, yawAcc: 0, mb: 0 };
+let lastSafe = { x: spawn.x, z: spawn.z, h: spawn.h }, safeT = 0;
+let state = 'start', playTime = 0, tod = 0.2, odo = 0, won = false, pinned = null, target = null;
+let camYaw = spawn.h + 2.4, camY = 0, lookY = 0, camMode = 0, muted = false;
+const CAMS = [[12, 5.2], [8, 3.4], [21, 11]];
+const keys = { up: false, down: false, left: false, right: false, brake: false, boost: false, hop: false };
+let caught = 0, wrecked = 0, rammed = 0, shaken = 0;
+let smashed = 0, combo = 0, comboT = 0, shake = 0, hopT = 0, boingT = 0, airT = 0;
+const parts = [];
+
+if (save) {
+  for (const id of save.found || []) { const l = landmarks.find(l => l.id === id); if (l) l.found = true; }
+  for (const i of save.crates || []) if (crates[i]) crates[i].got = true;
+  if (save.car && groundAt(save.car.x, save.car.z) >= SEA) { car.x = save.car.x; car.z = save.car.z; car.h = save.car.h; lastSafe = { x: car.x, z: car.z, h: car.h }; }
+  if (typeof save.expl === 'string' && save.expl.length === GN * GN) for (let i = 0; i < GN * GN; i++) if (save.expl[i] === '1') {
+    expl[i] = 1; if (landGrid[i]) explLand++;
+    punch((i % GN * GC + GC / 2) / MAPS, ((i / GN | 0) * GC + GC / 2) / MAPS, GC / MAPS * 1.5);
+  }
+  playTime = save.time || 0; tod = save.tod ?? 0.2; odo = save.odo || 0; won = !!save.won; smashed = save.smashed || 0;
+  caught = save.caught || 0; wrecked = save.wrecked || 0; rammed = save.rammed || 0; shaken = save.shaken || 0;
+}
+function settle() { car.g = car.y = groundAt(car.x, car.z); car.hs = heightF(car.x, car.z); car.vy = car.pop = car.sy = car.sv = car.flip = car.yawAcc = 0; airT = 0; camY = car.y + 5; lookY = car.y; }
+settle();
+function doSave() {
+  if (NOSAVE) return;
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      seed: SEED, found: landmarks.filter(l => l.found).map(l => l.id), crates: crates.map((c, i) => c.got ? i : -1).filter(i => i >= 0),
+      car: { x: lastSafe.x, z: lastSafe.z, h: lastSafe.h }, expl: Array.from(expl).join(''), time: playTime, tod, odo, won, smashed, caught, wrecked, rammed, shaken,
+    }));
+  } catch (e) {}
+}
+function newIsland() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ seed: (Math.random() * 1e9) | 0 })); } catch (e) {}
+  location.href = location.pathname;
+}
+
+// ───────────────────────── audio ─────────────────────────
+let AC = null, eng = null;
+function audioInit() {
+  if (AC) return;
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 300; g.gain.value = 0;
+    o.connect(f); o2.connect(f); f.connect(g); g.connect(AC.destination); o.start(); o2.start();
+    eng = { o, o2, f, g };
+  } catch (e) { AC = null; }
+}
+function tone(freq, t0, dur, type = 'triangle', vol = 0.1) {
+  if (!AC || muted) return;
+  const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + t0;
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.05);
+}
+const sfxFound = () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.11, 0.5));
+const sfxCrate = () => { tone(880, 0, 0.15); tone(1320, 0.08, 0.25); };
+let thumpT = 0;
+const sfxThump = () => { if (performance.now() - thumpT < 250) return; thumpT = performance.now(); tone(70, 0, 0.18, 'square', 0.12); };
+
+let crunchT = 0;
+const sfxCrunch = () => { if (performance.now() - crunchT < 70) return; crunchT = performance.now(); tone(80 + Math.random() * 60, 0, 0.13, 'sawtooth', 0.09); tone(220 + Math.random() * 220, 0.01, 0.07, 'square', 0.04); };
+function sfxBoing() {
+  if (!AC || muted) return;
+  const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+  o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(640, t + 0.22);
+  g.gain.setValueAtTime(0.17, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + 0.45);
+}
+
+// ───────────────────────── HUD ─────────────────────────
+const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc') };
+function popText(t) { el.pop.textContent = t; el.pop.classList.remove('show'); void el.pop.offsetWidth; el.pop.classList.add('show'); }
+let toastT = 0;
+function toast(kicker, name, line, secs = 5) {
+  el.toast.innerHTML = `<div class="k">${kicker}</div><div class="n">${name}</div>` + (line ? `<div class="l">${line}</div>` : '');
+  el.toast.classList.add('show'); toastT = secs;
+}
+function setState(s) {
+  state = s;
+  $('ovStart').classList.toggle('on', s === 'start'); $('ovJournal').classList.toggle('on', s === 'journal');
+  $('ovMap').classList.toggle('on', s === 'map'); $('ovWin').classList.toggle('on', s === 'win');
+  if (s === 'journal') renderJournal();
+  if (s === 'map') drawBigMap();
+  for (const k in keys) keys[k] = false;
+}
+function renderJournal() {
+  $('jgrid').innerHTML = landmarks.map(l => l.found
+    ? `<div class="jc found"><div class="jn">${l.def.name}</div>${l.def.lore}<div class="jw">Found ${l.where}.</div></div>`
+    : `<div class="jc"><div class="jn">? ? ?</div>${l.def.hint}<div class="jw">Somewhere ${l.where}.</div></div>`).join('');
+}
+function fmtTime(s) { const m = Math.floor(s / 60); return m + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+function pickTarget() {
+  if (race) { target = null; return; }
+  if (pinned && !pinned.found) { target = pinned; return; }
+  pinned = null; let best = null, bd = 1e9;
+  for (const l of landmarks) if (!l.found) { const d = Math.hypot(l.x - car.x, l.z - car.z); if (d < bd) { bd = d; best = l; } }
+  target = best;
+}
+function cycleTarget() {
+  if (race) return;
+  const un = landmarks.filter(l => !l.found).sort((a, b) => Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z));
+  if (!un.length) return;
+  pinned = un[(un.indexOf(target) + 1) % un.length]; target = pinned;
+  toast('WAYPOINT', 'Somewhere ' + pinned.where, pinned.def.hint, 3.5);
+}
+function updateHud() {
+  const nf = landmarks.filter(l => l.found).length;
+  el.found.textContent = nf; el.crates.textContent = crates.filter(c => c.got).length;
+  el.expl.textContent = Math.round(explLand / Math.max(1, landTotal) * 100); el.km.textContent = (odo / 1000).toFixed(1); el.smash.textContent = smashed;
+  el.npc.innerHTML = (opts.thieves ? `<b>${caught}</b> thieves caught<br>` : '') + (opts.hunters ? `<b>${wrecked}</b> hunters wrecked · <b>${shaken}</b> lost · <b>${rammed}</b> hits taken` : '');
+  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = BIOME_NAME[car.biome];
+  if (race) {
+    const cp = race.cp, dx = cp.x - car.x, dz = cp.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
+    el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
+    el.tn.textContent = `Race · You ${race.you} – ${race.bot} Thief`;
+    el.ts.textContent = `${Math.round(Math.hypot(dx, dz))} m to the waypoint · thief ${Math.round(Math.hypot(cp.x - race.rival.x, cp.z - race.rival.z))} m`;
+  } else if (target) {
+    const dx = target.x - car.x, dz = target.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
+    const ang = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
+    el.arrow.style.transform = `rotate(${ang}rad)`; el.arrow.style.opacity = 1;
+    el.tn.textContent = 'Waypoint: ' + target.where.replace('in the ', '').replace('near the ', '');
+    el.ts.textContent = Math.round(Math.hypot(dx, dz)) + ' m · ' + target.def.hint;
+  } else { el.arrow.style.opacity = .2; el.tn.textContent = 'All landmarks found'; el.ts.textContent = 'The island is yours to roam.'; }
+}
+const mini = $('mini'), mctx = mini.getContext('2d');
+function drawMarkers(ctx, toPx, big) {
+  if (race) {    // the one waypoint on the map
+    const [px, py] = toPx(race.cp.x, race.cp.z), w = ctx.canvas.width, cx = clamp(px, 10, w - 10), cy = clamp(py, 10, w - 10), p = 7 + Math.sin(performance.now() / 200) * 2;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, p, 0, 7); ctx.stroke();
+    ctx.strokeStyle = '#27e08a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, p, 0, 7); ctx.stroke();
+  }
+  for (const n of npcs) if (n.alive) {
+    const [px, py] = toPx(n.x, n.z);
+    ctx.fillStyle = n.type === 'thief' ? '#ffd838' : n.type === 'rival' ? '#ff5ad9' : '#ff3b2e'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 3.5, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  for (const l of landmarks) {
+    const [px, py] = toPx(l.x, l.z);
+    if (l.found) { ctx.fillStyle = '#ffcf5a'; ctx.strokeStyle = '#3a2a05'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else if (l === target) {
+      const w = ctx.canvas.width, cx = clamp(px, 10, w - 10), cy = clamp(py, 10, w - 10), p = 5 + Math.sin(performance.now() / 250) * 1.5;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
+      ctx.strokeStyle = '#ff7a2e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
+    }
+  }
+  if (big) for (const c of crates) if (c.got) { const [px, py] = toPx(c.x, c.z); ctx.fillStyle = '#7fe3ff'; ctx.fillRect(px - 2, py - 2, 4, 4); }
+  const [cx, cy] = toPx(car.x, car.z);
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI - car.h);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 6); ctx.lineTo(0, 3); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+function drawMini() {
+  const w = mini.width, span = 132, src = span * 2 / MAPS, sx = (car.x - MAPO) / MAPS - src / 2, sy = (car.z - MAPO) / MAPS - src / 2;
+  mctx.imageSmoothingEnabled = false; mctx.fillStyle = '#0b1322'; mctx.fillRect(0, 0, w, w);
+  mctx.drawImage(mapCv, sx, sy, src, src, 0, 0, w, w); mctx.drawImage(fogCv, sx, sy, src, src, 0, 0, w, w);
+  drawMarkers(mctx, (x, z) => [(x - car.x) / span * w / 2 + w / 2, (z - car.z) / span * w / 2 + w / 2], false);
+  mctx.fillStyle = 'rgba(255,255,255,.85)'; mctx.font = 'bold 11px ui-monospace, Menlo, monospace'; mctx.textAlign = 'center'; mctx.fillText('N', w / 2, 12);
+}
+function drawBigMap() {
+  const c = $('bigmap'), ctx = c.getContext('2d'), w = c.width;
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(mapCv, 0, 0, w, w); ctx.drawImage(fogCv, 0, 0, w, w);
+  drawMarkers(ctx, (x, z) => [(x - MAPO) / (MAPN * MAPS) * w, (z - MAPO) / (MAPN * MAPS) * w], true);
+}
+
+// ───────────────────────── input ─────────────────────────
+const KEYMAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'brake', ShiftLeft: 'boost', ShiftRight: 'boost', KeyE: 'hop' };
+function clearAt(x, z, r) {
+  if (groundAt(x, z) < SEA) return false;
+  const cx = Math.floor(x / CH), cz = Math.floor(z / CH);
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const c = chunks.get(ckey(cx + dx, cz + dz));
+    if (c) for (const o of c.obs) if (!o.dead && Math.hypot(o.x - x, o.z - z) < o.r + r) return false;
+  }
+  for (const o of lmObs) if (Math.hypot(o.x - x, o.z - z) < o.r + r) return false;
+  return true;
+}
+function recover() {
+  let bx = lastSafe.x, bz = lastSafe.z;
+  search: for (let rr = 0; rr <= 45; rr += 3) for (let k = 0; k < (rr ? 12 : 1); k++) {
+    const a = k * Math.PI / 6 + rr, x = lastSafe.x + Math.cos(a) * rr, z = lastSafe.z + Math.sin(a) * rr;
+    if (clearAt(x, z, 3.6)) { bx = x; bz = z; break search; }
+  }
+  car.x = bx; car.z = bz; car.h = lastSafe.h; car.vx = car.vz = 0; stuckT = 0; settle();
+}
+let stuckT = 0;
+addEventListener('keydown', e => {
+  if (KEYMAP[e.code]) { if (state === 'play') keys[KEYMAP[e.code]] = true; e.preventDefault(); return; }
+  if (e.repeat) return;
+  if (e.code === 'Enter' && state === 'start') start();
+  else if (e.code === 'KeyJ' && (state === 'play' || state === 'journal')) setState(state === 'journal' ? 'play' : 'journal');
+  else if (e.code === 'KeyM' && (state === 'play' || state === 'map')) setState(state === 'map' ? 'play' : 'map');
+  else if (e.code === 'Escape' && (state === 'journal' || state === 'map')) setState('play');
+  else if (state !== 'play') return;
+  else if (e.code === 'KeyC') camMode = (camMode + 1) % CAMS.length;
+  else if (e.code === 'KeyR') { recover(); toast('RECOVERED', 'Back on solid ground', '', 2); }
+  else if (e.code === 'KeyT') cycleTarget();
+  else if (e.code === 'KeyH') { tone(392, 0, 0.35, 'square', 0.07); tone(494, 0, 0.35, 'square', 0.07); }
+  else if (e.code === 'Digit1') { setOpt('thieves', !opts.thieves); toast('PARCEL THIEVES', opts.thieves ? 'On the loose' : 'Off', opts.thieves ? 'Yellow buggies. Run them down to get the parcel back.' : '', 2.5); }
+  else if (e.code === 'Digit2') { setOpt('hunters', !opts.hunters); toast('HUNTER TRUCKS', opts.hunters ? 'Coming for you' : 'Off', opts.hunters ? 'Outrun them, or hit them harder than they hit you.' : '', 2.5); }
+  else if (e.code === 'Digit3') { if (race) endRace(); else startRace(); }
+  else if (e.code === 'KeyV') { muted = !muted; toast('SOUND', muted ? 'Muted' : 'On', '', 1.5); }
+});
+addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+for (const b of document.querySelectorAll('#touch button')) {
+  const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { keys[k] = true; e.preventDefault(); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { keys[k] = false; });
+}
+function start() { audioInit(); if (AC && AC.state === 'suspended') AC.resume(); setState('play'); }
+$('bStart').onclick = start; $('bRace').onclick = () => { start(); if (!race) startRace(); }; $('bNew').onclick = newIsland; $('bNew2').onclick = newIsland;
+$('bJournal').onclick = () => { if (state === 'play' || state === 'journal') setState(state === 'journal' ? 'play' : 'journal'); };
+$('bMap').onclick = () => { if (state === 'play' || state === 'map') setState(state === 'map' ? 'play' : 'map'); };
+$('bJClose').onclick = () => setState('play'); $('bMClose').onclick = () => setState('play'); $('bKeep').onclick = () => setState('play');
+if (save && (save.found || []).length + (save.crates || []).length > 0) {
+  $('bStart').textContent = 'Continue expedition';
+  $('startInfo').textContent = `Saved expedition: ${(save.found || []).length}/12 landmarks, ${(save.crates || []).length}/30 parcels, ${fmtTime(save.time || 0)} on the clock.`;
+}
+
+// ───────────────────────── physics ─────────────────────────
+const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1]];
+function puff(x, y, z, col, size, up, em = 0.1) {
+  if (parts.length > 170) parts.shift();
+  parts.push({ x, y, z, vx: (Math.random() - .5) * 2, vy: up + Math.random() * 1.5, vz: (Math.random() - .5) * 2, life: 0.7 + Math.random() * 0.4, t: 0, size, col, em });
+}
+function touch(o) {   // deepest contact between the truck's two body circles and an obstacle
+  const fx = Math.sin(car.h), fz = Math.cos(car.h); let best = null;
+  for (const s of [1.15, -1.15]) {
+    const dx = car.x + fx * s - o.x, dz = car.z + fz * s - o.z, d2 = dx * dx + dz * dz, m = o.r + 0.95;
+    if (d2 < m * m && d2 > 1e-6) { const d = Math.sqrt(d2); if (!best || m - d > best.pen) best = { nx: dx / d, nz: dz / d, pen: m - d }; }
+  }
+  return best;
+}
+function bonk(c) {    // bounce off something that will not move
+  car.x += c.nx * c.pen; car.z += c.nz * c.pen;
+  const vn = car.vx * c.nx + car.vz * c.nz;
+  if (vn >= 0) return;
+  car.vx -= c.nx * vn * 1.6; car.vz -= c.nz * vn * 1.6;
+  if (vn < -6) { sfxThump(); shake = Math.max(shake, Math.min(0.45, -vn * 0.02)); car.pop = Math.max(car.pop, Math.min(5, -vn * 0.22)); car.rv += (Math.random() - .5) * 3; }
+}
+function knockDown(o, sp, burst, src = car) {
+  const D = DECO[o.kind], bits = Array.isArray(o.opt) ? o.opt : D.bits;
+  o.dead = true; felled.add(o.wx + ',' + o.wz); dirty.add(ckey(o.cx, o.cz));
+  const dx = sp > 0.1 ? src.vx / sp : 0, dz = sp > 0.1 ? src.vz / sp : 1;
+  if (!burst) {
+    const m = new MB(); D.build(m, -.5, 0, -.5, o.seed, o.opt);
+    if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
+    props.push({ mesh: makeMesh(m), x: o.x, y: o.y + 0.3, z: o.z, vx: src.vx * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3, vz: src.vz * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3,
+      vy: 3 + sp * 0.24 + Math.random() * 2, ax: dz, az: -dx, a: 0, av: 1.6 + sp * 0.17, t: 0, life: 5 + Math.random() * 2 });
+    if (src === car) { car.vx *= 1 - D.mass; car.vz *= 1 - D.mass; shake = Math.max(shake, 0.12 + sp * 0.006); car.sv += 1.5; car.pv -= 0.6; }
+  }
+  for (let i = 0; i < (burst ? 7 : 10); i++) puff(o.x + (Math.random() - .5) * 2, o.y + (burst ? 0.4 : 1.5 + Math.random() * 3), o.z + (Math.random() - .5) * 2, bits, 0.3 + Math.random() * 0.3, 2 + Math.random() * 3);
+  if (src !== car) return;
+  sfxCrunch(); smashed++; combo++; comboT = 2.5;
+  if (combo >= 3) popText(combo + 'x SMASH!');
+}
+function scenery(o, sp) {
+  const k = o.kind, D = DECO[k], d = Math.hypot(o.x - car.x, o.z - car.z);
+  if (k === 'shroom') {
+    if (d < 2.1 && car.air < 1 && boingT <= 0) {
+      boingT = 0.4; car.pop = Math.min(24, 17 + sp * 0.28); sfxBoing(); shake = Math.max(shake, 0.2); popText('BOING!');
+      for (let i = 0; i < 8; i++) puff(o.x + (Math.random() - .5) * 2.4, o.y + 2, o.z + (Math.random() - .5) * 2.4, i % 2 ? [.97, .95, .9] : [.9, .16, .14], 0.35, 3);
+    }
+    return;
+  }
+  if (D.roll) {     // fast enough and the truck rides up and over instead of stopping
+    if (o.rolling && d > o.r + 4.5) o.rolling = false;
+    if (!o.rolling && d < o.r + 3.2 && sp >= D.roll) o.rolling = true;
+    if (o.rolling) { if (d < o.r + 3.6) bumps.push(o); return; }
+  }
+  if (car.air > 2.5) return;
+  const c = touch(o);
+  if (!c) return;
+  if (k === 'bush') { if (sp > 2) knockDown(o, sp, true); return; }
+  if (D.knock && sp >= D.knock) { knockDown(o, sp, false); return; }
+  bonk(c);
+}
+function landTricks() {
+  const TAU = Math.PI * 2, rem = ((car.flip % TAU) + TAU) % TAU, rough = rem > 1.3 && rem < TAU - 1.3;
+  const flips = rough ? 0 : Math.round(Math.abs(car.flip) / TAU), spins = Math.floor((Math.abs(car.yawAcc) + 0.8) / TAU), bits = [];
+  if (flips) bits.push((flips > 1 ? flips + 'x ' : '') + (car.flip > 0 ? 'FRONT FLIP' : 'BACKFLIP'));
+  if (spins) bits.push(spins * 360 + ' SPIN');
+  if (airT > 1.3) bits.push('AIR ' + airT.toFixed(1) + 's');
+  if (rough) { popText('ROUGH LANDING'); car.vx *= 0.45; car.vz *= 0.45; shake = Math.max(shake, 0.5); car.sv -= 4; }
+  else if (bits.length) { popText(bits.join(' + ')); if (flips || spins) [660, 880, 1175].forEach((f, i) => tone(f, i * 0.07, 0.3)); }
+  airT = 0; car.flip = 0; car.yawAcc = 0;
+}
+let dustT = 0, biomeT = 0;
+function updateCar(dt) {
+  const thr = (keys.up ? 1 : 0) - (keys.down ? 1 : 0), st = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
+  car.steer += (st - car.steer) * Math.min(1, dt * 7);
+  const b = car.biome, ctrl = car.air < 0.45, inWater = car.g < WATER - 0.05, pvF = car.vF;
+  let fx = Math.sin(car.h), fz = Math.cos(car.h), vF = car.vx * fx + car.vz * fz, vL = 0;
+  if (ctrl) {
+    car.h += car.steer * 2.4 * (1 - 0.4 * Math.min(1, Math.abs(vF) / BOOSTV)) * clamp(vF / 7, -1, 1) * dt;
+    fx = Math.sin(car.h); fz = Math.cos(car.h);
+    const rx = -fz, rz = fx;
+    vF = car.vx * fx + car.vz * fz; vL = car.vx * rx + car.vz * rz;
+    let vmax = keys.boost ? BOOSTV : MAXV;
+    if (b === DESERT || b === BEACH) vmax *= 0.92;
+    if (inWater) vmax = 10;
+    if (thr > 0) vF += ACC * (keys.boost ? 1.3 : 1) * (vF < 9 ? 1.35 : 1) * Math.max(0, 1 - vF / vmax) * dt;
+    else if (thr < 0) { if (vF > 0.5) vF -= 38 * dt; else vF -= 13 * Math.max(0, 1 + vF / 10) * dt; }
+    else vF -= vF * 0.7 * dt;
+    vF -= vF * 0.12 * dt;
+    if (inWater) vF -= vF * 2.0 * dt;
+    let grip = b === SNOW ? 4 : 9;
+    if (keys.brake) { vF -= Math.sign(vF) * Math.min(Math.abs(vF), 22 * dt); grip = 2; }
+    vL *= Math.exp(-grip * dt);
+    car.vx = fx * vF + rx * vL; car.vz = fz * vF + rz * vL;
+    const gx = (heightF(car.x + 1, car.z) - heightF(car.x - 1, car.z)) / 2, gz = (heightF(car.x, car.z + 1) - heightF(car.x, car.z - 1)) / 2;
+    if (thr === 0 && Math.hypot(car.vx, car.vz) < 1.6 && Math.hypot(gx, gz) < 0.6) { const k = Math.exp(-6 * dt); car.vx *= k; car.vz *= k; }
+    else { car.vx -= gx * SLOPE * dt; car.vz -= gz * SLOPE * dt; }
+  } else { const dh = car.steer * 1.8 * dt; car.h += dh; car.yawAcc += dh; if (car.air > 0.9 && keys.brake) car.flip += thr * 7.5 * dt; }
+  const px = car.x, pz = car.z;
+  car.x += car.vx * dt; car.z += car.vz * dt;
+  // scenery: flatten it, roll over it, bounce off it
+  const sp0 = Math.hypot(car.vx, car.vz), ccx = Math.floor(car.x / CH), ccz = Math.floor(car.z / CH);
+  bumps.length = 0; hopT -= dt; boingT -= dt;
+  if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const c = chunks.get(ckey(ccx + dx, ccz + dz));
+    if (c) for (const o of c.obs) if (!o.dead && Math.abs(o.x - car.x) < 7 && Math.abs(o.z - car.z) < 7) scenery(o, sp0);
+  }
+  if (car.air < 2.5) for (const o of lmObs) if (Math.abs(o.x - car.x) < 14 && Math.abs(o.z - car.z) < 14) { const c = touch(o); if (c) bonk(c); }
+  odo += Math.hypot(car.x - px, car.z - pz);
+  // ground under the four wheels, plus any rock being driven over
+  fx = Math.sin(car.h); fz = Math.cos(car.h);
+  const pg = car.g; let mbump = 0;
+  const wh = WHEELS.map(([lx, lz]) => {
+    const wx = car.x + lx * fz + lz * fx, wz = car.z - lx * fx + lz * fz; let bu = 0;
+    for (const o of bumps) { const d = Math.hypot(o.x - wx, o.z - wz); if (d < o.r + 0.9) bu = Math.max(bu, o.bh * (1 - smooth(o.r * 0.5, o.r + 0.9, d))); }
+    if (bu > mbump) mbump = bu;
+    return groundAt(wx, wz) + bu;
+  });
+  const g = (wh[0] + wh[1] + wh[2] + wh[3]) / 4; car.g = g;
+  const hs = heightF(car.x, car.z), dhs = hs - car.hs; car.hs = hs;
+  let slopeVy = clamp(dhs / dt, -40, 15); if (slopeVy > 0) slopeVy *= 1.12;
+  const bvy = clamp((mbump - car.mb) / dt, 0, 16) * 0.5; car.mb = mbump;
+  if (keys.hop && car.air < 0.25 && hopT <= 0) { car.pop = Math.max(car.pop, 10.5); hopT = 0.3; tone(300, 0, 0.12, 'sine', 0.06); }
+  if (car.pop > 0 && car.air < 1.2) { car.vy = car.pop; car.y = Math.max(car.y, g) + 0.06; }
+  car.pop = 0;
+  car.vy -= GRAV * dt;
+  const ny = car.y + car.vy * dt; let grounded = false;
+  if (ny <= g + 0.02) {
+    grounded = true;
+    const impact = slopeVy - car.vy;
+    if (impact > 3) car.sv -= impact * 0.3;
+    if (impact > 9) {       // a proper landing: thump, dust, and a bounce if it was a big one
+      sfxThump(); shake = Math.max(shake, Math.min(0.5, impact * 0.02));
+      for (let i = 0; i < 8; i++) puff(car.x + (Math.random() - .5) * 2.4, g + .2, car.z + (Math.random() - .5) * 2.4, DUST[b], 0.5, 2);
+      car.y = g; car.vy = impact > 11 ? slopeVy + impact * 0.34 : slopeVy;
+    } else { car.y = car.y < g ? car.y + (g - car.y) * Math.min(1, dt * 18) : g; car.vy = slopeVy + bvy; }
+  } else car.y = ny;
+  car.air = car.y - g;
+  if (car.air > 0.6) airT += dt; else if (grounded && airT > 0) landTricks();
+  let tp, tr;
+  if (car.air < 0.6) {
+    tp = Math.atan2((wh[0] + wh[1] - wh[2] - wh[3]) / 2, 2.9); tr = Math.atan2((wh[0] + wh[2] - wh[1] - wh[3]) / 2, 2.1);
+    car.gp += (tp - car.gp) * Math.min(1, dt * 10); car.gr += (tr - car.gr) * Math.min(1, dt * 10);
+  } else {
+    tp = clamp(car.vy * 0.022, -0.45, 0.3); tr = 0;
+    car.gp += (car.pitch - car.gp) * Math.min(1, dt * 10); car.gr += (car.roll - car.gr) * Math.min(1, dt * 10);
+  }
+  car.vF = car.vx * fx + car.vz * fz; car.spin += car.vF / 0.6 * dt;
+  // the body rides on springs: it squats, leans and wobbles around where the wheels are
+  if (ctrl) { tp += clamp((car.vF - pvF) / dt, -40, 40) * 0.004; tr += clamp(car.steer * car.vF * 0.007, -0.2, 0.2); }
+  car.pv += ((tp - car.pitch) * 110 - car.pv * 8) * dt; car.pitch += car.pv * dt;
+  car.rv += ((tr - car.roll) * 110 - car.rv * 8) * dt; car.roll += car.rv * dt;
+  car.sv += (-car.sy * 150 - car.sv * 7.5) * dt;
+  car.sy = clamp(car.sy + car.sv * dt - (grounded ? clamp(g - pg - dhs, -0.25, 0.25) * 0.6 : 0), -0.32, 0.5);
+  // bookkeeping
+  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); }
+  safeT -= dt;
+  if (safeT <= 0 && car.air < 0.3 && g >= SEA && Math.abs(car.vF) > 4) { safeT = 0.8; lastSafe = { x: car.x, z: car.z, h: car.h }; }
+  if (WATER - car.y > 1.5) { recover(); toast('TOO DEEP', 'Winched back to shore', 'The truck wades through shallows, not lakes.', 3); sfxThump(); }
+  if ((keys.up || keys.down) && Math.abs(car.vF) < 0.6) { stuckT += dt; if (stuckT > 2.5) { stuckT = -6; toast('STUCK?', 'Press R to recover', 'The winch will drag the truck to open ground nearby.', 3.5); } } else if (stuckT > 0) stuckT = 0; else stuckT = Math.min(0, stuckT + dt);
+  // dust and spray
+  dustT -= dt;
+  const sp = Math.hypot(car.vx, car.vz);
+  if (dustT <= 0 && car.air < 0.3 && (sp > 7 || Math.abs(vL) > 2.5)) {
+    dustT = sp > 20 || Math.abs(vL) > 2.5 ? 0.035 : 0.07;
+    const s = Math.random() < .5 ? 1 : -1, wx = car.x + s * 1.05 * fz - 1.6 * fx, wz = car.z - s * 1.05 * fx - 1.6 * fz;
+    if (inWater) puff(wx, WATER + .1, wz, DUST[6], 0.45, 3.5); else puff(wx, car.y + .2, wz, DUST[b], 0.3 + Math.random() * .3, 0.8);
+  }
+  if (keys.boost && thr > 0 && ctrl && Math.random() < dt * 45) puff(car.x - fx * 2.5, car.y + 0.95, car.z - fz * 2.5, [1, .5 + Math.random() * .35, .12], 0.32, 0.4, 1);
+  // discoveries
+  reveal(car.x, car.z);
+  for (const l of landmarks) if (!l.found && Math.hypot(l.x - car.x, l.z - car.z) < l.pad + 5) {
+    l.found = true; sfxFound(); toast('LANDMARK DISCOVERED', l.def.name, l.def.lore, 6.5); doSave();
+    if (landmarks.every(l => l.found) && !won) { won = true; setTimeout(() => {
+      $('winText').innerHTML = `All twelve landmarks found in <b>${fmtTime(playTime)}</b>.<br>${crates.filter(c => c.got).length}/30 lost parcels recovered · ${Math.round(explLand / landTotal * 100)}% of the island explored · ${(odo / 1000).toFixed(1)} km driven.`;
+      setState('win'); doSave();
+    }, 4500); }
+  }
+  for (const c of crates) if (!c.got && Math.abs(c.x - car.x) < 3 && Math.abs(c.z - car.z) < 3 && Math.abs(c.y - car.y) < 4) {
+    c.got = true; sfxCrate(); const n = crates.filter(c => c.got).length;
+    toast('LOST PARCEL RECOVERED', n + ' / 30', n === 30 ? 'Every last one. Somebody owes you a tip.' : '', 2.2);
+  }
+}
+
+// ───────────────────────── NPCs: thieves to chase, hunters that chase you ─────────────────────────
+const OPT_KEY = 'voxel-driver-opts';
+const opts = { thieves: true, hunters: true };
+try { Object.assign(opts, JSON.parse(localStorage.getItem(OPT_KEY) || '{}')); } catch (e) {}
+const npcs = [];
+let race = null;     // { you, bot, rival, cp, hold } while racing the thief
+const TWHEELS = [[.92, 1.05], [-.92, 1.05], [.92, -1.1], [-.92, -1.1]];
+const npcMesh = (() => {
+  const t = new MB(); t.lo = .9;
+  const yel = [.98, .8, .15], dk = [.15, .15, .18], grey = [.5, .52, .56], blk = [.13, .14, .17], red = [.8, .12, .1], glass = [.2, .32, .45];
+  t.box(-.8, .5, -1.6, .8, 1, 1.5, yel); t.box(-.6, .5, 1.5, .6, .85, 1.95, [.85, .65, .1]); t.box(-.82, .7, -1.62, .82, .8, 1.52, dk);
+  t.box(-.55, 1, -.5, .55, 1.45, .1, dk); t.box(-.25, 1.45, -.4, .25, 1.9, 0, [.9, .75, .6]); t.box(-.27, 1.62, -.02, .27, 1.76, .02, dk);
+  t.box(-.78, 1, -.95, -.68, 2, -.85, dk); t.box(.68, 1, -.95, .78, 2, -.85, dk); t.box(-.78, 1.9, -.95, .78, 2, -.85, dk);
+  t.box(-.45, 1, -1.55, .45, 1.55, -1, C.card); t.box(-.05, 1, -1.57, .05, 1.57, -.98, C.cream);
+  t.box(.62, 1, -1.5, .7, 3.6, -1.42, grey); t.box(.7, 3, -1.48, 1.6, 3.6, -1.44, red);
+  const h = new MB(); h.lo = .92;
+  h.box(-.85, .7, -2.1, .85, .95, 2.1, [.08, .08, .1]); h.box(-1, .95, -2.2, 1, 1.6, 2.2, blk); h.box(-1.02, 1.18, -2.22, 1.02, 1.3, 2.22, red);
+  h.box(-.95, 1.6, -1, .95, 2.35, .7, blk); h.box(-.85, 1.68, .7, .85, 2.25, .76, glass); h.box(-.97, 1.68, -.8, -.95, 2.25, .5, glass); h.box(.95, 1.68, -.8, .97, 2.25, .5, glass);
+  h.box(-1, 2.35, -1.05, 1, 2.47, .75, blk);
+  h.box(-1.15, .7, 2.2, 1.15, 1.15, 2.5, grey); h.box(-.8, 1.15, 2.36, .8, 1.75, 2.48, grey); h.box(-1.1, .75, -2.4, 1.1, 1.05, -2.2, grey);
+  const lr = new MB(), lb = new MB(), off = [.06, .06, .1];
+  lr.box(-.6, 2.47, -.3, -.05, 2.7, 0, [1, .12, .1]); lr.box(.05, 2.47, -.3, .6, 2.7, 0, off);
+  lb.box(-.6, 2.47, -.3, -.05, 2.7, 0, off); lb.box(.05, 2.47, -.3, .6, 2.7, 0, [.2, .4, 1]);
+  return { thief: makeMesh(t), hunter: makeMesh(h), lightR: makeMesh(lr), lightB: makeMesh(lb) };
+})();
+function landSpot(cx, cz, rmin, rmax, face) {
+  for (let i = 0; i < 60; i++) {
+    const a = face == null ? Math.random() * 6.2832 : face + (Math.random() - .5) * 2.2, rr = rmin + Math.random() * (rmax - rmin);
+    const x = cx + Math.sin(a) * rr, z = cz + Math.cos(a) * rr;
+    if (Math.hypot(x, z) < R * 0.95 && top(Math.floor(x), Math.floor(z)) >= SEA + 1) return [x, z];
+  }
+  return null;
+}
+function spawnNpc(n) {
+  const thief = n.type === 'thief';
+  const s = landSpot(car.x, car.z, thief ? 70 : 85, thief ? 150 : 120, thief ? null : car.h + Math.PI) || landSpot(car.x, car.z, 45, 200, null);
+  if (!s) { n.wait = 3; return; }
+  initNpc(n, s[0], s[1], Math.random() * 6.2832);
+}
+function initNpc(n, x, z, h) {
+  n.x = x; n.z = z; n.y = groundAt(x, z); n.hs = heightF(x, z); n.h = n.wander = h;
+  n.v = n.vx = n.vz = n.vy = n.pitch = n.roll = n.spin = n.stun = n.slowT = n.jink = n.jinkT = n.bumpT = 0;
+  n.alive = true; n.hot = false;
+}
+function syncNpcs() {   // make the roster match the options
+  if (race) return;
+  for (const [type, on, count] of [['thief', opts.thieves, 3], ['hunter', opts.hunters, 2]]) {
+    const have = npcs.filter(n => n.type === type);
+    if (!on) { for (const n of have) npcs.splice(npcs.indexOf(n), 1); continue; }
+    for (let i = have.length; i < count; i++) npcs.push({ type, alive: false, wait: type === 'hunter' ? 7 + i * 9 : 0.5 + i * 1.5 });
+  }
+}
+function setOpt(k, v) {
+  opts[k] = v;
+  try { localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) {}
+  $('oThieves').checked = opts.thieves; $('oHunters').checked = opts.hunters;
+  syncNpcs(); updateHud();
+}
+$('oThieves').onchange = e => setOpt('thieves', e.target.checked);
+$('oHunters').onchange = e => setOpt('hunters', e.target.checked);
+$('oThieves').checked = opts.thieves; $('oHunters').checked = opts.hunters;
+syncNpcs();
+function tumble(n, nx, nz) {   // send a caught thief or wrecked hunter cartwheeling
+  if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
+  props.push({ mesh: n.type === 'thief' ? npcMesh.thief : npcMesh.hunter, shared: true, x: n.x, y: n.y + 0.4, z: n.z, vx: car.vx * 0.8 + nx * 4, vz: car.vz * 0.8 + nz * 4,
+    vy: 8 + Math.random() * 3, ax: nz, az: -nx, a: 0, av: 7, t: 0, life: 4 });
+  for (let i = 0; i < 14; i++) puff(n.x + (Math.random() - .5) * 2, n.y + 1 + Math.random() * 2, n.z + (Math.random() - .5) * 2, i % 3 ? (n.type === 'thief' ? [1, .85, .2] : [.9, .2, .15]) : [1, 1, 1], 0.35, 4, 0.6);
+}
+function updateNpcs(dt) {
+  for (const n of npcs) {
+    if (!n.alive) { n.wait -= dt; if (n.wait <= 0) spawnNpc(n); continue; }
+    const thief = n.type === 'thief', rival = n.type === 'rival', dx = car.x - n.x, dz = car.z - n.z, d = Math.hypot(dx, dz) || 1;
+    let want = n.h, vt = 0;
+    if (rival) {       // heads for the waypoint, quicker when behind and easing off when ahead
+      const cp = race.cp, tx = cp.x - n.x, tz = cp.z - n.z; n.bumpT -= dt;
+      if (race.hold <= 0) { want = Math.atan2(tx, tz); vt = clamp(26 + (Math.hypot(tx, tz) - Math.hypot(cp.x - car.x, cp.z - car.z)) * 0.12, 21, 34); }
+    } else if (thief) {
+      if (d > 270) { n.alive = false; n.wait = 1; continue; }
+      if (d < 58) {      // run for it, jinking harder the closer you get
+        n.jinkT -= dt;
+        if (n.jinkT <= 0) { n.jinkT = 0.7 + Math.random() * 1.1; n.jink = (Math.random() - .5) * (d < 32 ? 1.2 : 0.5); }
+        want = Math.atan2(-dx, -dz) + (d < 15 ? 0 : n.jink); vt = d < 15 ? 18.5 : 20.5;     // panics in a straight line once you are on its bumper
+      } else { n.wander += (Math.random() - .5) * dt * 2; want = n.wander; vt = 7; }
+      if (Math.hypot(n.x, n.z) > R * 0.78) want += angDiff(Math.atan2(-n.x, -n.z), want) * 0.6;
+    } else {
+      if (d > 250) { n.alive = false; n.wait = 2; continue; }
+      if (d < 45 && !n.hot) { n.hot = true; popText('HUNTER ON YOUR TAIL'); tone(620, 0, 0.18, 'square', 0.05); tone(820, 0.18, 0.18, 'square', 0.05); }
+      if (n.hot && d > 135) { shaken++; popText('HUNTER SHAKEN OFF'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); n.alive = false; n.wait = 12; continue; }
+      if (n.stun > 0) n.stun -= dt;
+      else { const lead = Math.min(1, d / 40); want = Math.atan2(dx + car.vx * lead, dz + car.vz * lead); vt = d > 90 ? 33 : 27.5; }
+    }
+    // steer round deep water rather than into it
+    const probe = (a, r) => groundAt(n.x + Math.sin(n.h + a) * r, n.z + Math.cos(n.h + a) * r);
+    const wet = thief ? SEA - 0.5 : SEA - 1.5;     // thieves will not even get their wheels wet, so rivers and shores corner them
+    if (probe(0, 13) < wet || probe(0, 6) < wet) want = n.h + (probe(0.9, 13) > probe(-0.9, 13) ? 1.4 : -1.4);
+    const turn = thief ? (d < 15 ? 1.1 : 1.8) : 2.4;
+    n.h += clamp(angDiff(want, n.h), -turn * dt, turn * dt);
+    const fx = Math.sin(n.h), fz = Math.cos(n.h);
+    vt *= 1 - clamp((heightF(n.x + fx, n.z + fz) - heightF(n.x, n.z)) * 0.45, -0.15, 0.5);
+    if (n.y < WATER - 0.1) vt = Math.min(vt, thief ? 6 : 11);
+    n.v += (vt - n.v) * Math.min(1, dt * 1.6);
+    n.vx = fx * n.v; n.vz = fz * n.v; n.x += n.vx * dt; n.z += n.vz * dt;
+    // scenery: they flatten trees too, and bounce off what will not move
+    const ccx = Math.floor(n.x / CH), ccz = Math.floor(n.z / CH);
+    for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
+      const c = chunks.get(ckey(ccx + cx, ccz + cz));
+      if (c) for (const o of c.obs) {
+        if (o.dead) continue;
+        const ox = n.x - o.x, oz = n.z - o.z, od = Math.hypot(ox, oz), m = o.r + 1.2;
+        if (od >= m || od < 1e-4) continue;
+        if (o.kind === 'shroom') { if (n.y - groundAt(n.x, n.z) < 0.5) n.vy = 15; }
+        else if (o.kind === 'bush') knockDown(o, n.v, true, n);
+        else if (DECO[o.kind].knock) { if (Math.abs(n.v) > 4) knockDown(o, n.v, false, n); }
+        else if (o.kind === 'boulder') { n.x += ox / od * (m - od); n.z += oz / od * (m - od); n.v *= 0.9; }
+      }
+    }
+    for (const o of lmObs) { const ox = n.x - o.x, oz = n.z - o.z, od = Math.hypot(ox, oz), m = o.r + 1.3; if (od < m && od > 1e-4) { n.x += ox / od * (m - od); n.z += oz / od * (m - od); n.v *= 0.92; } }
+    // ground, gravity and tilt
+    const g = groundAt(n.x, n.z), hs = heightF(n.x, n.z), sv = clamp((hs - n.hs) / dt, -40, 15); n.hs = hs;
+    n.vy -= GRAV * dt;
+    const ny = n.y + n.vy * dt;
+    if (ny <= g + 0.02) { n.y = n.y < g ? n.y + (g - n.y) * Math.min(1, dt * 18) : g; n.vy = sv; } else n.y = ny;
+    if (n.y - g < 0.6) {
+      const k = Math.min(1, dt * 9);
+      n.pitch += (Math.atan2(groundAt(n.x + fx * 1.4, n.z + fz * 1.4) - groundAt(n.x - fx * 1.4, n.z - fz * 1.4), 2.8) - n.pitch) * k;
+      n.roll += (Math.atan2(groundAt(n.x + fz, n.z - fx) - groundAt(n.x - fz, n.z + fx), 2) - n.roll) * k;
+    }
+    n.spin += n.v / 0.5 * dt;
+    if (WATER - n.y > 1.6) { if (rival) relocate(n); else { n.alive = false; n.wait = 2; } continue; }
+    if (Math.abs(n.v) < 2 && vt > 5) { n.slowT += dt; if (n.slowT > 3) { if (rival) relocate(n); else { n.alive = false; n.wait = 1.5; } continue; } } else n.slowT = 0;
+    // contact with the player
+    if (d < 3.9 && Math.abs(n.y - car.y) < 4) {
+      const nx = -dx / d, nz = -dz / d;      // from the player towards the npc
+      if (rival) {       // rubbing is racing
+        if (n.bumpT <= 0) { n.bumpT = 0.6; car.vx -= nx * 5; car.vz -= nz * 5; n.x += nx * 1.2; n.z += nz * 1.2; n.v *= 0.85; car.pop = Math.max(car.pop, 3); sfxThump(); shake = Math.max(shake, 0.25); }
+      } else if (thief) {
+        caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
+        tumble(n, nx, nz); n.alive = false; n.wait = 5;
+      } else if (n.stun <= 0) {
+        const vp = car.vx * nx + car.vz * nz, vn = -(n.vx * nx + n.vz * nz);     // who was closing harder
+        if (vp > vn + 2 && vp > 9) {
+          wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4);
+          car.vx *= 0.75; car.vz *= 0.75; tumble(n, nx, nz); n.alive = false; n.wait = 10;
+        } else {
+          rammed++; popText('RAMMED!'); sfxThump(); shake = Math.max(shake, 0.5);
+          car.vx += -nx * 12 + n.vx * 0.35; car.vz += -nz * 12 + n.vz * 0.35; car.pop = Math.max(car.pop, 7); car.rv += (Math.random() - .5) * 6;
+          n.stun = 2.6; n.v = -5;
+        }
+      }
+    }
+  }
+}
+
+// ───────────────────────── race mode ─────────────────────────
+function relocate(n) {     // the rival got stuck or swamped: winch it to dry land nearby, pointed at the waypoint
+  const cp = race.cp, s = landSpot(n.x, n.z, 8, 30, Math.atan2(cp.x - n.x, cp.z - n.z)) || landSpot(n.x, n.z, 5, 70, null);
+  if (s) initNpc(n, s[0], s[1], Math.atan2(cp.x - s[0], cp.z - s[1])); else n.slowT = 0;
+}
+function nextCheckpoint() {   // a land point the same distance from both racers, ideally with no lake in either one's way
+  const a = car, b = race.rival, mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, sx = b.x - a.x, sz = b.z - a.z, sep = Math.hypot(sx, sz) || 1, ux = -sz / sep, uz = sx / sep;
+  let best = null, bestBad = 1e9;
+  for (let i = 0; i < 90 && bestBad > 0; i++) {
+    const D = Math.max(sep / 2 + 25, 170 + Math.random() * 190), t = Math.sqrt(D * D - sep * sep / 4) * (i % 2 ? 1 : -1), x = mx + ux * t, z = mz + uz * t;
+    if (Math.hypot(x, z) > R * 0.88 || top(Math.floor(x), Math.floor(z)) < SEA + 1) continue;
+    if (lmObs.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 7)) continue;
+    let bad = 0;
+    for (let k = 1; k < 14; k++) { const f = k / 14; if (groundAt(lerp(a.x, x, f), lerp(a.z, z, f)) < SEA - 1.5) bad++; if (groundAt(lerp(b.x, x, f), lerp(b.z, z, f)) < SEA - 1.5) bad++; }
+    if (bad < bestBad) { bestBad = bad; best = [x, z]; }
+  }
+  if (!best) {      // cornered against the coast: take the fairest land point going
+    let bd = 1e9;
+    for (let i = 0; i < 80; i++) { const s = landSpot(mx, mz, 120, 380, null); if (!s) continue; const df = Math.abs(Math.hypot(s[0] - a.x, s[1] - a.z) - Math.hypot(s[0] - b.x, s[1] - b.z)); if (df < bd) { bd = df; best = s; } }
+  }
+  if (!best) best = [mx, mz];
+  race.cp = { x: best[0], z: best[1], y: top(Math.floor(best[0]), Math.floor(best[1])) }; race.hold = 1.6;
+}
+function startRace() {
+  npcs.length = 0;
+  const fx = Math.sin(car.h), fz = Math.cos(car.h), r = { type: 'rival' };
+  let x = car.x + fz * 7, z = car.z - fx * 7;       // lines up on your left
+  if (top(Math.floor(x), Math.floor(z)) < SEA) { const s = landSpot(car.x, car.z, 5, 25, null); if (s) { x = s[0]; z = s[1]; } }
+  initNpc(r, x, z, car.h); npcs.push(r);
+  race = { you: 0, bot: 0, rival: r, cp: null, hold: 0 };
+  nextCheckpoint(); race.hold = 3; pickTarget(); updateHud();
+  toast('RACE THE THIEF', 'First to 5 wins', 'One waypoint opens the same distance from both of you. Follow the arrow to the green beam.', 4.5);
+}
+function endRace() { race = null; npcs.length = 0; syncNpcs(); pickTarget(); updateHud(); toast('RACE OVER', 'Back to exploring', 'Press 3 to race again.', 2.5); }
+function updateRace(dt) {
+  if (!race) return;
+  if (race.hold > 0) race.hold -= dt;
+  const cp = race.cp, n = race.rival, dp = Math.hypot(cp.x - car.x, cp.z - car.z), db = Math.hypot(cp.x - n.x, cp.z - n.z);
+  if (dp > 9 && db > 9) return;
+  const you = dp <= db;
+  if (you) { race.you++; [660, 880, 1320].forEach((f, i) => tone(f, i * 0.08, 0.3)); } else { race.bot++; [330, 262].forEach((f, i) => tone(f, i * 0.14, 0.35, 'square', 0.07)); }
+  for (let i = 0; i < 16; i++) puff(cp.x + (Math.random() - .5) * 6, cp.y + 1 + Math.random() * 3, cp.z + (Math.random() - .5) * 6, you ? [.2, 1, .6] : [1, .35, .85], 0.45, 5, 0.8);
+  if (race.you >= 5 || race.bot >= 5) {
+    toast(you ? 'YOU WIN THE RACE' : 'THE THIEF WINS', `${race.you} – ${race.bot}`, you ? 'Clean pair of heels. Next race starts now.' : 'Beaten to it. Next race starts now.', 5);
+    popText(you ? 'WINNER!' : 'BEATEN!'); race.you = race.bot = 0;
+  } else popText(you ? `YOURS!  ${race.you} – ${race.bot}` : `THIEF GOT IT  ${race.you} – ${race.bot}`);
+  nextCheckpoint();
+}
+
+// ───────────────────────── sky ─────────────────────────
+function skyState(t) {
+  const a = t < 0.72 ? t / 0.72 * Math.PI : Math.PI + (t - 0.72) / 0.28 * Math.PI;
+  const sx = Math.cos(a), sy = Math.sin(a);
+  const sun = norm3([sx * 0.85, sy, 0.42]), moon = norm3([-sx * 0.85, -sy, 0.42]), e = sun[1];
+  const day = smooth(-0.1, 0.22, e), dusk = (1 - smooth(0, 0.42, Math.abs(e))) * 0.75, str = smooth(0.0, 0.14, Math.abs(e));
+  const warm = [1, .58, .32];
+  let zen = mix3([.03, .05, .13], [.24, .5, .9], day), hor = mix3([.09, .12, .22], [.74, .87, .98], day);
+  hor = mix3(hor, warm, dusk * 0.7); zen = mix3(zen, [.45, .35, .5], dusk * 0.35);
+  let sunCol = mix3([.2, .26, .42], [1.0, .95, .84], day); sunCol = mix3(sunCol, warm, dusk * 0.6 * day).map(v => v * str * (0.55 + 0.45 * day));
+  const L = e >= 0 ? sun : moon;
+  return { sun, moon, light: norm3([L[0], Math.max(L[1], 0.25), L[2]]), zen, hor, sunCol, day,
+    amb: mix3([.17, .19, .28], [.3, .31, .34], day), skyAmb: mix3([.08, .1, .17], [.24, .27, .32], day),
+    disc: mix3([0, 0, 0], mix3([1, .95, .8], warm, dusk), smooth(-0.08, 0.02, e)) };
+}
+
+// ───────────────────────── render ─────────────────────────
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5), w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+const ID = ident();
+function setDraw(model, o) {
+  const u = MAIN.u; o = o || {};
+  gl.uniformMatrix4fv(u.uModel, false, model);
+  gl.uniform1f(u.uAlpha, o.alpha ?? 1); gl.uniform1f(u.uEmis, o.emis ?? 0); gl.uniform1f(u.uWave, o.wave ?? 0);
+  gl.uniform1f(u.uFogMode, o.fogMode ?? 0); gl.uniform1f(u.uCut, o.cut ?? 0);
+  const t = o.tint || [1, 1, 1]; gl.uniform3f(u.uTint, t[0], t[1], t[2]);
+  const f = o.fog || FOG; gl.uniform2f(u.uFog, f[0], f[1]);
+}
+function draw(mesh, model, o) { if (!mesh) return; setDraw(model, o); gl.bindVertexArray(mesh.vao); gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_INT, 0); }
+const FOG = [RD * CH * 0.5, RD * CH - 12];
+let cam = { eye: [0, 0, 0], tgt: [0, 0, 0] };
+function updateCamera(dt) {
+  if (state === 'start') camYaw += dt * 0.12; else camYaw += angDiff(car.h, camYaw) * Math.min(1, dt * 3.6);
+  const [cd, chh] = CAMS[camMode];
+  const ex = car.x - Math.sin(camYaw) * cd, ez = car.z - Math.cos(camYaw) * cd;
+  let want = Math.max(car.y + chh, groundAt(ex, ez) + 1.8, WATER + 1.3);
+  for (let t = 0.3; t < 0.95; t += 0.2) {
+    const need = car.y + 1.8 + (groundAt(lerp(car.x, ex, t), lerp(car.z, ez, t)) + 1.2 - car.y - 1.8) / t;
+    if (need > want) want = Math.min(need, car.y + chh + 14);
+  }
+  camY += (want - camY) * Math.min(1, dt * 5); lookY += (car.y - lookY) * Math.min(1, dt * 9);
+  shake *= Math.exp(-7 * dt);
+  cam.eye = [ex + (Math.random() - .5) * shake, camY + (Math.random() - .5) * shake, ez + (Math.random() - .5) * shake]; cam.tgt = [car.x + Math.sin(car.h) * 2.5, lookY + 1.8, car.z + Math.cos(car.h) * 2.5];
+}
+function render(time) {
+  resize();
+  const w = canvas.width, h = canvas.height, asp = w / h, sk = skyState(tod);
+  gl.viewport(0, 0, w, h); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+  const fov = (60 + 9 * clamp(Math.abs(car.vF) / BOOSTV, 0, 1)) * Math.PI / 180;
+  const view = lookAt(cam.eye, cam.tgt, [0, 1, 0]), VP = mul(persp(fov, asp, 0.3, 1400), view);
+  const F = norm3([cam.tgt[0] - cam.eye[0], cam.tgt[1] - cam.eye[1], cam.tgt[2] - cam.eye[2]]), Rv = norm3(cross(F, [0, 1, 0])), Uv = cross(Rv, F);
+  // sky
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.useProgram(SKY.p);
+  const s = SKY.u, th = Math.tan(fov / 2);
+  gl.uniform3fv(s.uR, Rv); gl.uniform3fv(s.uU, Uv); gl.uniform3fv(s.uF, F); gl.uniform2f(s.uTan, th * asp, th);
+  gl.uniform3fv(s.uZen, sk.zen); gl.uniform3fv(s.uHor, sk.hor); gl.uniform3fv(s.uSunDir, sk.sun); gl.uniform3fv(s.uMoonDir, sk.moon);
+  gl.uniform3fv(s.uSunDisc, sk.disc); gl.uniform1f(s.uNight, 1 - sk.day);
+  gl.bindVertexArray(emptyVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // world
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.useProgram(MAIN.p);
+  const u = MAIN.u, fx = Math.sin(car.h), fz = Math.cos(car.h);
+  gl.uniformMatrix4fv(u.uVP, false, VP); gl.uniform3fv(u.uSun, sk.light); gl.uniform3fv(u.uSunCol, sk.sunCol);
+  gl.uniform3fv(u.uAmb, sk.amb); gl.uniform3fv(u.uSkyAmb, sk.skyAmb); gl.uniform3fv(u.uCam, cam.eye); gl.uniform3fv(u.uFogCol, sk.hor);
+  gl.uniform1f(u.uTime, time); gl.uniform1f(u.uLamp, 1 - sk.day);
+  gl.uniform3f(u.uLampPos, car.x + fx * 2.3, car.y + 1.4, car.z + fz * 2.3); gl.uniform3fv(u.uLampDir, norm3([fx, -0.1, fz]));
+  gl.uniform3f(u.uCar, car.x, lookY + 1.6, car.z);
+  setDraw(ID);
+  const vis = [], maxD = RD * CH + 14;
+  for (const c of chunks.values()) {
+    const dx = c.cx * CH + 8 - cam.eye[0], dz = c.cz * CH + 8 - cam.eye[2];
+    if (dx * dx + dz * dz > maxD * maxD) continue;
+    if (dx * F[0] + dz * F[2] < -40) continue;
+    vis.push(c);
+    if (c.mesh) { gl.bindVertexArray(c.mesh.vao); gl.drawElements(gl.TRIANGLES, c.mesh.count, gl.UNSIGNED_INT, 0); }
+  }
+  for (const l of landmarks) {
+    if (Math.hypot(l.x - cam.eye[0], l.z - cam.eye[2]) > maxD + 20) continue;
+    const m = T(l.x, l.y, l.z);
+    draw(l.mesh, m, { cut: 1 }); draw(l.glow, m, { emis: 1 });
+    if (l.extra) draw(l.extra, mul(m, l.def.xmat(time)), { cut: 1 });
+  }
+  // truck
+  const base = mulN(T(car.x, car.y, car.z), RY(car.h), car.flip ? mulN(T(0, 1.3, 0), RX(car.flip), T(0, -1.3, 0)) : ID);
+  const cm = mulN(base, T(0, car.sy, 0), RX(-car.pitch), RZ(car.roll)), wm = mulN(base, RX(-car.gp), RZ(car.gr));
+  draw(carMesh.body, cm); draw(carMesh.glow, cm, { emis: 1 });
+  WHEELS.forEach(([lx, lz], i) => draw(carMesh.wheel, mulN(wm, T(lx, 0.6, lz), RY(i < 2 ? car.steer * 0.45 : 0), RX(car.spin))));
+  // flattened scenery, still tumbling
+  for (const p of props) { const k = Math.min(1, (p.life - p.t) / 0.5); draw(p.mesh, mulN(T(p.x, p.y, p.z), RA(p.ax, 0, p.az, p.a), Sc(k, k, k))); }
+  // thieves and hunters
+  for (const n of npcs) {
+    if (!n.alive || Math.hypot(n.x - cam.eye[0], n.z - cam.eye[2]) > maxD) continue;
+    const thief = n.type !== 'hunter', nm = mulN(T(n.x, n.y, n.z), RY(n.h), RX(-n.pitch), RZ(n.roll)), ws = thief ? 0.8 : 1;
+    draw(thief ? npcMesh.thief : npcMesh.hunter, nm);
+    if (!thief) draw(Math.floor(time * 6) % 2 ? npcMesh.lightR : npcMesh.lightB, nm, { emis: 1 });
+    for (const [lx, lz] of thief ? TWHEELS : WHEELS) draw(carMesh.wheel, mulN(nm, T(lx, 0.6 * ws, lz), RX(n.spin), Sc(ws, ws, ws)));
+    if (Math.hypot(n.x - car.x, n.z - car.z) > 18) draw(cubeMesh, mulN(T(n.x, n.y + (thief ? 5.2 : 5.6) + Math.sin(time * 4) * 0.3, n.z), RY(time * 2), RZ(0.785), RX(0.785), Sc(.55, .55, .55)), { emis: 1, tint: n.type === 'rival' ? [1, .35, .85] : thief ? [1, .85, .2] : [1, .2, .15] });
+  }
+  // parcels
+  crates.forEach((c, i) => {
+    if (c.got || Math.hypot(c.x - cam.eye[0], c.z - cam.eye[2]) > 150) return;
+    draw(crateMesh, mulN(T(c.x, c.y + 1.3 + Math.sin(time * 2 + i) * 0.25, c.z), RY(time * 1.2 + i), Sc(1.1, 1.1, 1.1)));
+  });
+  // particles
+  for (const p of parts) { const q = p.t / p.life, sz = p.size * (0.55 + q * 0.8) * (1 - q * q * q); draw(cubeMesh, mul(T(p.x, p.y, p.z), Sc(sz, sz, sz)), { tint: p.col, emis: p.em }); }
+  // clouds
+  const drift = (time * 1.4) % CLOUD_P;
+  for (let k = -2; k <= 1; k++) draw(cloudMesh, T(drift + k * CLOUD_P, 0, 0), { emis: 0.35, fog: [260, 620] });
+  // transparent
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  if (car.air < 6) draw(shadowMesh, mulN(T(car.x, car.g + 0.09, car.z), RY(car.h), RX(-car.gp), RZ(car.gr)), { tint: [0, 0, 0], alpha: 0.32 * (1 - car.air / 6) });
+  setDraw(ID, { alpha: 0.8, wave: 1 });
+  for (const c of vis) if (c.water) { gl.bindVertexArray(c.water.vao); gl.drawElements(gl.TRIANGLES, c.water.count, gl.UNSIGNED_INT, 0); }
+  gl.blendFunc(gl.ONE, gl.ONE);
+  const pulse = 0.5 + 0.12 * Math.sin(time * 2.2);
+  if (race) {     // the race waypoint: a fat green beam you can see from across the island
+    const cp = race.cp, gp = 0.55 + 0.2 * Math.sin(time * 5);
+    draw(beamMesh, mul(T(cp.x, cp.y, cp.z), Sc(3.4, 1.6, 3.4)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, 1 * gp, .5 * gp] });
+    draw(beamMesh, mul(T(cp.x, cp.y, cp.z), Sc(9, 0.05, 9)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, .9 * gp, .45 * gp] });
+  }
+  for (const l of landmarks) if (!race && !l.found && Math.hypot(l.x - cam.eye[0], l.z - cam.eye[2]) < 330)
+    draw(beamMesh, T(l.x, l.y, l.z), { emis: 1, fogMode: 1, fog: [190, 330], tint: l === target ? [1 * pulse, .62 * pulse, .2 * pulse] : [.8 * pulse, .68 * pulse, .3 * pulse] });
+  for (const c of crates) if (!c.got && Math.hypot(c.x - cam.eye[0], c.z - cam.eye[2]) < 150)
+    draw(beamMesh, mul(T(c.x, c.y, c.z), Sc(0.4, 0.16, 0.4)), { emis: 1, fogMode: 1, fog: [90, 150], tint: [.2 * pulse, .7 * pulse, .9 * pulse] });
+  gl.disable(gl.BLEND); gl.depthMask(true);
+}
+
+// ───────────────────────── loop ─────────────────────────
+planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(250);
+lastCC = ckey(Math.floor(car.x / CH), Math.floor(car.z / CH));
+reveal(car.x, car.z); pickTarget(); updateHud();
+let last = performance.now(), hudT = 0, saveT = 5, miniT = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  tick(dt, now);
+  requestAnimationFrame(frame);
+}
+function tick(dt, now, drawIt = true) {
+  if (state === 'play') {
+    updateCar(dt / 2); updateCar(dt / 2);
+    playTime += dt; tod = (tod + dt / 540) % 1;
+    saveT -= dt; if (saveT <= 0) { saveT = 5; doSave(); }
+    updateNpcs(dt); updateRace(dt);
+    if (dirty.size) {     // re-mesh chunks that just lost a tree
+      for (const k of dirty) { const c = chunks.get(k); if (c) { freeMesh(c.mesh); freeMesh(c.water); chunks.set(k, buildChunk(c.cx, c.cz)); } }
+      dirty.clear();
+    }
+  }
+  for (let i = props.length - 1; i >= 0; i--) {
+    const p = props[i]; p.t += dt;
+    if (p.t > p.life) { if (!p.shared) freeMesh(p.mesh); props.splice(i, 1); continue; }
+    p.vy -= 26 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.a += p.av * dt;
+    const pg = groundAt(p.x, p.z) + 0.25;
+    if (p.y <= pg && p.vy <= 0) {
+      p.y = pg; const f = Math.exp(-3.5 * dt); p.vx *= f; p.vz *= f;
+      if (p.vy < -4) { p.vy *= -0.45; p.av *= 0.75; }
+      else { p.vy = 0; p.av *= Math.exp(-6 * dt); const tg = Math.round((p.a - Math.PI / 2) / Math.PI) * Math.PI + Math.PI / 2; p.a += (tg - p.a) * Math.min(1, dt * 7); }
+    }
+  }
+  for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.t += dt; if (p.t > p.life) { parts.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vy -= 3 * dt; }
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) el.toast.classList.remove('show'); }
+  const cc = ckey(Math.floor(car.x / CH), Math.floor(car.z / CH));
+  if (cc !== lastCC) { lastCC = cc; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); }
+  pumpChunks(6);
+  updateCamera(dt);
+  if (drawIt && !gl.isContextLost()) render(now / 1000);
+  hudT -= dt; if (hudT <= 0) { hudT = 0.1; pickTarget(); updateHud(); }
+  miniT -= dt; if (miniT <= 0) { miniT = 0.05; drawMini(); }
+  if (eng) {
+    const t = AC.currentTime, sp = Math.abs(car.vF), on = state === 'play' && !muted, thr = keys.up || keys.down ? 1 : 0;
+    const f0 = 38 + sp * 3.2 + thr * 10;
+    eng.o.frequency.setTargetAtTime(f0, t, 0.06); eng.o2.frequency.setTargetAtTime(f0 * 0.5, t, 0.06);
+    eng.f.frequency.setTargetAtTime(240 + sp * 22, t, 0.1); eng.g.gain.setTargetAtTime(on ? 0.028 + thr * 0.02 + sp * 0.0005 : 0, t, 0.1);
+  }
+}
+requestAnimationFrame(frame);
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the island…', '', 60); });
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
+window.__game = { car, landmarks, crates, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+})();
+</script>
+</body>
+</html>
