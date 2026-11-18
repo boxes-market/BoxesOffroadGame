@@ -93,7 +93,7 @@
     <button id="bJournal">Journal (J)</button>
     <button id="bMap">Map (M)</button>
   </div>
-  <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div></div>
+  <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div><div id="hookT" style="font-size:12px;opacity:.78"></div></div>
   <div id="miniWrap" class="panel"><canvas id="mini" width="180" height="180"></canvas></div>
   <div id="help">WASD drive · Space handbrake · Shift boost · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
   <div id="stealth"></div>
@@ -174,12 +174,14 @@ const SAVE_KEY = 'voxel-driver-v6' + (ROOM ? '-room-' + ROOM : '');      // a ro
 const NOSAVE = new URLSearchParams(location.search).has('nosave');   // test drives: neither read nor write the save
 let save = null;
 try { if (!NOSAVE) save = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
-const qSeed = Number(new URLSearchParams(location.search).get('seed'));
+// in a room the world comes from the room code itself, so two players can never end up in different worlds by sharing a cut-off link
+const qSeed = ROOM ? [...ROOM].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7) % 999983 + 1 : Number(new URLSearchParams(location.search).get('seed'));
 if (qSeed && (!save || save.seed !== qSeed)) save = null;
 const SEED = save && Number.isFinite(save.seed) ? save.seed : (qSeed || 4107);
 
 // ───────────────────────── math helpers ─────────────────────────
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const hyp = (a, b) => Math.sqrt(a * a + b * b);      // used wherever the world is generated: unlike Math.hypot, sqrt gives the same answer in every browser
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { let t = (x - a) / (b - a); t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); };
 const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
@@ -334,7 +336,7 @@ function groundAt(x, z) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 // climate drifts slowly across the world; the country round the start is always temperate
-const temp = (x, z) => ((fbm(x / 1100 + 31, z / 1100 + 47, 5, 2) - 0.5) * 3.4 + (fbm(x / 260 + 9, z / 260 - 4, 15, 2) - 0.5) * 0.5) * smooth(250, 800, Math.hypot(x, z));
+const temp = (x, z) => ((fbm(x / 1100 + 31, z / 1100 + 47, 5, 2) - 0.5) * 3.4 + (fbm(x / 260 + 9, z / 260 - 4, 15, 2) - 0.5) * 0.5) * smooth(250, 800, hyp(x, z));
 function naturalBiome(x, z, h) {
   const alt = h - SEA;
   if (alt < 0) return SEABED;
@@ -348,31 +350,32 @@ function naturalBiome(x, z, h) {
 }
 function biomeAt(x, z, h) {
   const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH);
-  if (st && st.kind === 'city' && h >= SEA && Math.hypot(x - st.x, z - st.z) < st.pad) return CITY;
+  if (st && st.kind === 'city' && h >= SEA && hyp(x - st.x, z - st.z) < st.pad) return CITY;
   return naturalBiome(x, z, h);
 }
 // A city is a grid of streets 40 apart and 8 wide, a ring road round the edge, and blocks of four lots between.
 function cityCell(st, wx, wz) {      // t: 0 street, 1 pavement, 2 building lot, 3 park, 4 plaza
   const lx = wx - Math.floor(st.x) + 4000, lz = wz - Math.floor(st.z) + 4000, sx = lx % 40, sz = lz % 40;
-  if (Math.hypot(wx + .5 - st.x, wz + .5 - st.z) > st.pad - 9) return { t: 0, sx: 0, sz: 0, lz, lx, ring: true };
+  if (hyp(wx + .5 - st.x, wz + .5 - st.z) > st.pad - 9) return { t: 0, sx: 0, sz: 0, lz, lx, ring: true };
   if (sx < 8 || sz < 8) return { t: 0, sx, sz, lx, lz, ring: false };
   if (sx < 10 || sz < 10 || sx >= 38 || sz >= 38) return { t: 1, sx, sz };
   const li = sx < 24 ? 0 : 1, lj = sz < 24 ? 0 : 1, ox = 10 + li * 14, oz = 10 + lj * 14, lotX = wx - sx + ox, lotZ = wz - sz + oz;
-  if (Math.hypot(lotX + 7 - st.x, lotZ + 7 - st.z) > st.pad - 24) return { t: 4, sx, sz };       // too near the ring road to build on
+  if (hyp(lotX + 7 - st.x, lotZ + 7 - st.z) > st.pad - 24) return { t: 4, sx, sz };       // too near the ring road to build on
   const hh = hash2(lotX, lotZ, 707);
   return { t: hh < 0.14 ? 3 : hh < 0.21 ? 4 : 2, sx, sz, lotX, lotZ, hh, px: sx - ox, pz: sz - oz };
 }
 function onStreet(x, z) {
   const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH);
   if (!st || st.kind !== 'city') return false;
-  const d = Math.hypot(x - st.x, z - st.z);
+  const d = hyp(x - st.x, z - st.z);
   if (d > st.pad) return false;
   if (d > st.pad - 9) return true;
   return (Math.floor(x) - Math.floor(st.x) + 4000) % 40 < 8 || (Math.floor(z) - Math.floor(st.z) + 4000) % 40 < 8;
 }
 const onRoad = (x, z) => roadDist(x, z) < 3 || onStreet(x, z);
+const COAST8 = [[1, 0], [.7071067811865476, .7071067811865476], [0, 1], [-.7071067811865476, .7071067811865476], [-1, 0], [-.7071067811865476, -.7071067811865476], [0, -1], [.7071067811865476, -.7071067811865476]];
 function isCoast(x, z) {
-  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (baseHeight(x + Math.cos(a) * 26, z + Math.sin(a) * 26) < SEA - 1) return true; }
+  for (const [dx, dz] of COAST8) if (baseHeight(x + dx * 26, z + dz * 26) < SEA - 1) return true;
   return false;
 }
 
@@ -601,10 +604,10 @@ function astar(ax, az, bx, bz, x0, z0, W, H) {     // route-find on a coarse gri
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
       const ni = ci + di, nj = cj + dj;
       if ((!di && !dj) || ni < 1 || nj < 1 || ni >= GW - 1 || nj >= GH - 1) continue;      // the outer ring is off limits, so a road never strays near a region it does not belong to
-      const n = nj * GW + ni, dist = CS * Math.hypot(di, dj);
+      const n = nj * GW + ni, dist = di && dj ? CS * 1.4142135623730951 : CS;
       let cost = dist * (1 + Math.abs(hC[n] - hC[c]) / dist * 12);
       if (hC[n] < SEA) cost *= 7;
-      if (gs[c] + cost < gs[n]) { gs[n] = gs[c] + cost; from[n] = c; push(gs[n] + CS * Math.hypot(ni - ti, nj - tj), n); }
+      if (gs[c] + cost < gs[n]) { gs[n] = gs[c] + cost; from[n] = c; push(gs[n] + CS * hyp(ni - ti, nj - tj), n); }
     }
   }
   const cells = [];
@@ -621,7 +624,7 @@ function profile(pts, y0, y1) {    // the road's own height along its length: th
   if (y0 != null) y[0] = y0;
   if (y1 != null) y[n - 1] = y1;
   const relax = times => { for (let it = 0; it < times; it++) { for (let i = 1; i < n - 1; i++) tmp[i] = .25 * y[i - 1] + .5 * y[i] + .25 * y[i + 1]; for (let i = 1; i < n - 1; i++) y[i] = tmp[i]; } };
-  const seg = i => Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]) * 0.25;
+  const seg = i => hyp(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]) * 0.25;
   const grade = () => {      // nothing steeper than one in four
     for (let i = 1; i < n - 1; i++) y[i] = clamp(y[i], y[i - 1] - seg(i - 1), y[i - 1] + seg(i - 1));
     for (let i = n - 2; i > 0; i--) y[i] = clamp(y[i], y[i + 1] - seg(i), y[i + 1] + seg(i));
@@ -634,7 +637,7 @@ function profile(pts, y0, y1) {    // the road's own height along its length: th
 function stampRoad(tile, rx, rz, pts, ys, off, main) {       // write the part of a path that falls in this region into its tile; off narrows it (side trails)
   const x0 = rx * REG, z0 = rz * REG, m = ROAD_R + 1, touched = [];
   for (let k = 0; k < pts.length - 1; k++) {
-    const [ax, az] = pts[k], [bx, bz] = pts[k + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az)));
+    const [ax, az] = pts[k], [bx, bz] = pts[k + 1], n = Math.max(1, Math.ceil(hyp(bx - ax, bz - az)));
     for (let q = 0; q < n; q++) {
       const px = ax + (bx - ax) * q / n, pz = az + (bz - az) * q / n;
       if (px < x0 - m || pz < z0 - m || px > x0 + REG + m || pz > z0 + REG + m) continue;
@@ -644,7 +647,7 @@ function stampRoad(tile, rx, rz, pts, ys, off, main) {       // write the part o
         const iz = iz0 + dz; if (iz < 0 || iz >= REG) continue;
         for (let dx = -ROAD_R; dx <= ROAD_R; dx++) {
           const ix = ix0 + dx; if (ix < 0 || ix >= REG) continue;
-          const d = Math.hypot(ix + .5 + x0 - px, iz + .5 + z0 - pz) + off;
+          const d = hyp(ix + .5 + x0 - px, iz + .5 + z0 - pz) + off;
           if (d >= ROAD_R) continue;
           const v = (255 * (1 - d / ROAD_R)) | 0, i = iz * REG + ix;
           if (v > tile.sv[i]) { if (!tile.sv[i]) touched.push(i); tile.sv[i] = v; tile.sy[i] = yv; }
@@ -654,7 +657,7 @@ function stampRoad(tile, rx, rz, pts, ys, off, main) {       // write the part o
   }
   // fold this road into the tile. Where two roads run close or cross, each block takes a blend of their heights weighted by nearness, so they meet on a slope and not a step
   for (const i of touched) {
-    const v = tile.sv[i], w = (v / 255) ** 3 + 1e-4;
+    const v = tile.sv[i], w = (v / 255) * (v / 255) * (v / 255) + 1e-4;
     tile.w[i] += w; tile.wy[i] += w * tile.sy[i];
     if (v > tile.f[i]) { tile.f[i] = v; tile.y[i] = main; }
     tile.sv[i] = 0;
@@ -674,7 +677,7 @@ function edgeRoute(rx, rz, dir) {     // the road from this region's site to the
   e = null;
   if (A && B) {
     let pts = astar(A.x, A.z, B.x, B.z, rx * REG, rz * REG, dir ? REG : 2 * REG, dir ? 2 * REG : REG);
-    pts = chaikin(pts, 2).filter(([x, z]) => (!A.pad || Math.hypot(x - A.x, z - A.z) > A.pad + 1) && (!B.pad || Math.hypot(x - B.x, z - B.z) > B.pad + 1));      // stop at the edge of a landmark's yard or a city
+    pts = chaikin(pts, 2).filter(([x, z]) => (!A.pad || hyp(x - A.x, z - A.z) > A.pad + 1) && (!B.pad || hyp(x - B.x, z - B.z) > B.pad + 1));      // stop at the edge of a landmark's yard or a city
     if (pts.length > 2) e = { pts, ys: profile(pts, nodeY(A), nodeY(B)), main: 1 };
   }
   if (edgeCache.size > 600) edgeCache.clear();
@@ -689,12 +692,12 @@ function buildRoadTile(rx, rz) {
   const count = own.length ? 1 + (hash2(rx, rz, 601) > 0.5 ? 1 : 0) : 0;
   for (let j = 0; j < count; j++) {
     const par = own[Math.floor(hash2(rx, rz, 602 + j) * own.length)], inside = [];
-    par.pts.forEach(([x, z], i) => { if (x > x0 + 60 && x < x0 + REG - 60 && z > z0 + 60 && z < z0 + REG - 60 && (!st || Math.hypot(x - st.x, z - st.z) > st.pad + 40)) inside.push(i); });
+    par.pts.forEach(([x, z], i) => { if (x > x0 + 60 && x < x0 + REG - 60 && z > z0 + 60 && z < z0 + REG - 60 && (!st || hyp(x - st.x, z - st.z) > st.pad + 40)) inside.push(i); });
     if (!inside.length) continue;
     const pi = inside[Math.floor(hash2(rx, rz, 610 + j) * inside.length)], [sx, sz] = par.pts[pi];
     for (let c = 0; c < 12; c++) {
-      const x = x0 + 50 + hash2(rx * 17 + c, rz + j, 620) * (REG - 100), z = z0 + 50 + hash2(rx + j, rz * 17 + c, 621) * (REG - 100), dd = Math.hypot(x - sx, z - sz);
-      if (dd < 110 || dd > 300 || baseHeight(x, z) < SEA + 1.5 || (st && Math.hypot(x - st.x, z - st.z) < st.pad + 45)) continue;
+      const x = x0 + 50 + hash2(rx * 17 + c, rz + j, 620) * (REG - 100), z = z0 + 50 + hash2(rx + j, rz * 17 + c, 621) * (REG - 100), dd = hyp(x - sx, z - sz);
+      if (dd < 110 || dd > 300 || baseHeight(x, z) < SEA + 1.5 || (st && hyp(x - st.x, z - st.z) < st.pad + 45)) continue;
       if (tile.f && tile.f[(Math.floor(z) - z0) * REG + Math.floor(x) - x0]) continue;       // the far end should be away from the main roads
       const pts = chaikin(astar(sx, sz, x, z, x0, z0, REG, REG), 2);
       tile.roads.push({ pts, main: 0 }); stampRoad(tile, rx, rz, pts, profile(pts, par.ys[pi], null), 1.4, 0); tile.ends.push([x, z]);
@@ -714,7 +717,7 @@ function regionCrates(rx, rz) {     // lost parcels: one at the end of every sid
   for (const [x, z] of tl.ends) add(x, z);
   for (let c = 0; c < 6; c++) {
     const x = rx * REG + 30 + hash2(rx + c * 13, rz, 631) * (REG - 60), z = rz * REG + 30 + hash2(rx, rz + c * 13, 632) * (REG - 60);
-    if ((st && Math.hypot(x - st.x, z - st.z) < st.pad + 15) || roadDist(x, z) < ROAD_R) continue;
+    if ((st && hyp(x - st.x, z - st.z) < st.pad + 15) || roadDist(x, z) < ROAD_R) continue;
     if (add(x, z)) break;
   }
   crateCache.set(k, list);
@@ -971,12 +974,12 @@ function buildChunk(cx, cz) {
       continue;
     }
     if (b === FOREST) {
-      if (r2 < 0.016) (r3 < 0.3 ? put('pine', r3 / 0.3, false) : put('oak', r3));
+      if (r2 < 0.016) { if (r2 < 0.0105) (r3 < 0.3 ? put('pine', r3 / 0.3, false) : put('oak', r3)); }
       else if (r2 < 0.034) put('bush', r3, jit(C.leaf2, .3, r3));
       else if (r2 < 0.037) { mb.box(wx + .42, h, wz + .42, wx + .58, h + .3, wz + .58, C.cream); mb.box(wx + .25, h + .3, wz + .25, wx + .75, h + .5, wz + .75, [.8, .2, .2]); }
       else if (r2 < 0.0381) put('shroom', r3);
     } else if (b === GRASS) {
-      if (r2 < 0.004) put('oak', r3);
+      if (r2 < 0.004) { if (r2 < 0.0025) put('oak', r3); }
       else if (r2 < 0.012) put('bush', r3, jit(C.leaf2, .3, r3));
       else if (r2 < 0.045) { mb.box(wx + .45, h, wz + .45, wx + .55, h + .35, wz + .55, C.leaf); mb.box(wx + .34, h + .35, wz + .34, wx + .66, h + .62, wz + .66, FLOWERS[Math.floor(r3 * 4.99)]); }
       else if (r2 < 0.049) put(rockKind, r3, false);
@@ -988,11 +991,11 @@ function buildChunk(cx, cz) {
       else if (r2 < 0.021) put('bush', r3 * 0.3, [.62, .52, .3]);
       else if (r2 < 0.0213) put('shroom', r3);
     } else if (b === SNOW) {
-      if (r2 < 0.009) put('pine', r3, true);
+      if (r2 < 0.009) { if (r2 < 0.006) put('pine', r3, true); }
       else if (r2 < 0.019) put(rockKind, r3, true);
       else if (r2 < 0.0193) put('shroom', r3);
     } else if (b === BEACH) {
-      if (r2 < 0.008) put('palm', r3);
+      if (r2 < 0.008) { if (r2 < 0.0055) put('palm', r3); }
       else if (r2 < 0.013) put('rock', r3 * 0.69, false);
     } else if (b === ROCK) {
       if (r2 < 0.014) put(rockKind, r3, false);
@@ -1142,6 +1145,10 @@ const keys = { up: false, down: false, left: false, right: false, brake: false, 
 let caught = 0, wrecked = 0, rammed = 0, shaken = 0;
 let smashed = 0, combo = 0, comboT = 0, shake = 0, hopT = 0, boingT = 0, airT = 0;
 const parts = [];
+// two-player link (see the multiplayer section): the connection, and the other player's truck as last heard
+const NET = { ws: null, pc: null, dc: null, host: false, status: ROOM ? 'Connecting…' : '', beat: 0, retry: 0, fell: [], pend: [], cid: '', clock: performance.now(), lastRx: 0 };
+const remote = { type: 'friend', alive: false, x: 0, y: 0, z: 0, h: 0, vx: 0, vz: 0, cover: false, pitch: 0, roll: 0, flip: 0, steer: 0, spin: 0, sy: 0, v: 0, hk: null, t: null };
+const guestMode = () => !!ROOM && !NET.host && !!NET.dc && NET.dc.readyState === 'open';      // connected as the guest: the host runs the thieves and hunters, and this player sees and plays against the same ones
 
 const foundSites = new Map(), gotCrates = new Set();      // site id → the kind of landmark found there; ids of parcels picked up
 let actX = 1e9, actZ = 1e9;
@@ -1158,7 +1165,7 @@ function refreshActive(force) {      // work out which sites and parcels are nea
   }
   for (let cz = Math.floor(car.z - 230) >> RSH; cz <= Math.floor(car.z + 230) >> RSH; cz++) for (let cx = Math.floor(car.x - 230) >> RSH; cx <= Math.floor(car.x + 230) >> RSH; cx++)
     for (const c of regionCrates(cx, cz)) { c.got = gotCrates.has(c.id); crates.push(c); }
-  if (pinned && !landmarks.includes(pinned)) pinned = null;
+  if (pinned && !remote.alive && !landmarks.includes(pinned)) pinned = null;
 }
 if (save) {
   for (const [id, kind] of save.found || []) foundSites.set(id, kind);
@@ -1227,7 +1234,7 @@ function sfxBoing() {
 }
 
 // ───────────────────────── HUD ─────────────────────────
-const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc'), stealth: $('stealth'), kinds: $('sKinds'), friend: $('sFriend') };
+const el = { found: $('sFound'), crates: $('sCrates'), expl: $('sExpl'), km: $('sKm'), spd: $('spd'), biome: $('biome'), arrow: $('arrow'), tn: $('trackName'), ts: $('trackSub'), toast: $('toast'), smash: $('sSmash'), pop: $('pop'), npc: $('sNpc'), stealth: $('stealth'), kinds: $('sKinds'), friend: $('sFriend'), hook: $('hookT') };
 function popText(t) { el.pop.textContent = t; el.pop.classList.remove('show'); void el.pop.offsetWidth; el.pop.classList.add('show'); }
 let toastT = 0;
 function toast(kicker, name, line, secs = 5) {
@@ -1255,18 +1262,29 @@ function renderJournal() {       // the kinds of place there are to find; the wo
   }).join('');
 }
 function fmtTime(s) { const m = Math.floor(s / 60); return m + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+function targetPool() {      // the places a waypoint can be. In a room both players are pointed at the same one: the nearest unfound place to the host
+  if (!remote.alive) return { pool: landmarks, ox: car.x, oz: car.z };
+  const guest = guestMode(), ox = guest ? remote.x : car.x, oz = guest ? remote.z : car.z;
+  if (!guest) return { pool: landmarks, ox, oz };
+  const pool = [], rx = Math.floor(ox) >> RSH, rz = Math.floor(oz) >> RSH;
+  for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) { const st = siteOf(rx + dx, rz + dz); if (st && st.def) { st.found = foundSites.has(st.id); pool.push(st); } }
+  return { pool, ox, oz };
+}
 function pickTarget() {
   if (race) { target = null; return; }
   if (pinned && !pinned.found) { target = pinned; return; }
   pinned = null; let best = null, bd = 1e9;
-  for (const l of landmarks) if (!l.found) { const d = Math.hypot(l.x - car.x, l.z - car.z); if (d < bd) { bd = d; best = l; } }
+  const { pool, ox, oz } = targetPool();
+  for (const l of pool) if (!l.found) { const d = Math.hypot(l.x - ox, l.z - oz); if (d < bd) { bd = d; best = l; } }
   target = best;
 }
 function cycleTarget() {
   if (race) return;
-  const un = landmarks.filter(l => !l.found).sort((a, b) => Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z));
+  const { pool, ox, oz } = targetPool();
+  const un = pool.filter(l => !l.found).sort((a, b) => Math.hypot(a.x - ox, a.z - oz) - Math.hypot(b.x - ox, b.z - oz));
   if (!un.length) return;
   pinned = un[(un.indexOf(target) + 1) % un.length]; target = pinned;
+  netSend({ t: 'tg', id: pinned.id });
   toast('WAYPOINT', whereText(pinned), pinned.def.hint, 3.5);
 }
 function updateHud() {
@@ -1274,13 +1292,15 @@ function updateHud() {
   el.expl.textContent = (explCells * EC * EC / 1e6).toFixed(2); el.km.textContent = (odo / 1000).toFixed(1); el.smash.textContent = smashed;
   let st = '', sc = '';
   if (opts.hunters && !race) {
-    const hs = npcs.filter(n => n.type === 'hunter' && n.alive);
-    if (hs.some(n => n.mode === 'chase')) { st = hs.some(n => n.mode === 'chase' && n.tired) ? 'SPOTTED · HUNTER TIRING' : 'SPOTTED'; sc = '#ff5a4a'; }
-    else if (hs.some(n => n.mode === 'search')) { st = 'THEY ARE SEARCHING'; sc = '#ffb52e'; }
+    const hs = npcs.filter(n => n.type === 'hunter' && n.alive), me = guestMode() ? 1 : 0, on = hs.filter(n => n.who === me);      // the ones after this player
+    if (on.some(n => n.mode === 'chase')) { st = on.some(n => n.mode === 'chase' && n.tired) ? 'SPOTTED · HUNTER TIRING' : 'SPOTTED'; sc = '#ff5a4a'; }
+    else if (on.some(n => n.mode === 'search')) { st = 'THEY ARE SEARCHING'; sc = '#ffb52e'; }
+    else if (hs.some(n => n.mode === 'chase')) { st = 'THEY ARE AFTER YOUR FRIEND'; sc = '#7cc4ff'; }
     else if (hs.some(n => Math.hypot(n.x - car.x, n.z - car.z) < 330)) { st = inCover() ? 'HIDDEN · IN COVER' : 'UNSEEN'; sc = '#3ee08f'; }
   }
   el.stealth.style.display = st ? 'block' : 'none'; el.stealth.textContent = st; el.stealth.style.color = sc;
   el.npc.innerHTML = (opts.thieves ? `<b>${caught}</b> thieves caught<br>` : '') + (opts.hunters ? `<b>${wrecked}</b> hunters wrecked · <b>${shaken}</b> lost · <b>${rammed}</b> hits taken` : '');
+  el.hook.textContent = hook ? 'Hook out' : hookCd > 0 ? 'Hook ready in ' + Math.ceil(hookCd) + ' s' : 'Hook ready';
   el.friend.textContent = ROOM ? (remote.alive ? 'Friend: ' + whereText(remote) : NET.status) : '';
   el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.road && car.biome !== CITY ? 'Road' : BIOME_NAME[car.biome];
   if (race) {
@@ -1314,11 +1334,11 @@ function drawMarkers(ctx, toPx, big) {
   for (const l of landmarks) {
     const [px, py] = toPx(l.x, l.z);
     if (l.found) { ctx.fillStyle = '#ffcf5a'; ctx.strokeStyle = '#3a2a05'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-    else if (l === target) {
-      const w = ctx.canvas.width, cx = clamp(px, 10, w - 10), cy = clamp(py, 10, w - 10), p = 5 + Math.sin(performance.now() / 250) * 1.5;
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
-      ctx.strokeStyle = '#ff7a2e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
-    }
+  }
+  if (target && !target.found) {      // the waypoint: a ring, pinned to the edge of the map when out of view
+    const [px, py] = toPx(target.x, target.z), w = ctx.canvas.width, cx = clamp(px, 10, w - 10), cy = clamp(py, 10, w - 10), p = 5 + Math.sin(performance.now() / 250) * 1.5;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
+    ctx.strokeStyle = '#ff7a2e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, p + 2, 0, 7); ctx.stroke();
   }
   const [cx, cy] = toPx(car.x, car.z);
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI - car.h);
@@ -1432,7 +1452,11 @@ function knockDown(o, sp, burst, src = car) {
     if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
     props.push({ mesh: makeMesh(m), x: o.x, y: o.y + 0.3, z: o.z, vx: src.vx * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3, vz: src.vz * (0.5 + Math.random() * 0.4) + (Math.random() - .5) * 3,
       vy: 3 + sp * 0.24 + Math.random() * 2, ax: dz, az: -dx, a: 0, av: 1.6 + sp * 0.17, t: 0, life: 5 + Math.random() * 2 });
-    if (src === car) { car.vx *= 1 - D.mass; car.vz *= 1 - D.mass; shake = Math.max(shake, 0.12 + sp * 0.006); car.sv += 1.5; car.pv -= 0.6; }
+    if (src === car) {      // ploughing through costs speed and unsettles the truck, far more at a crawl or when it is one tree straight after another
+      const slow = clamp((24 - sp) / 18, 0, 1), k = Math.min(0.6, D.mass * (1 + slow * 2.4) * (1 + Math.min(combo, 4) * 0.22));
+      car.vx *= 1 - k; car.vz *= 1 - k; car.h += (Math.random() - .5) * 0.12 * slow;
+      shake = Math.max(shake, 0.12 + sp * 0.006 + slow * 0.1); car.sv += 1.5 + slow * 2; car.pv -= 0.6 + slow * 1.2; car.rv += (Math.random() - .5) * (3 + slow * 9);
+    }
   }
   for (let i = 0; i < (burst ? 7 : 10); i++) puff(o.x + (Math.random() - .5) * 2, o.y + (burst ? 0.4 : 1.5 + Math.random() * 3), o.z + (Math.random() - .5) * 2, bits, 0.3 + Math.random() * 0.3, 2 + Math.random() * 3);
   if (src !== car) return;
@@ -1472,6 +1496,14 @@ function scenery(o, sp) {
   if (k === 'bush') { if (sp > 2) knockDown(o, sp, true); return; }
   if (D.knock && sp >= D.knock) { knockDown(o, sp, false); return; }
   bonk(c);
+}
+function checkWin() {      // every kind of place found, by either player
+  if (new Set(foundSites.values()).size < KINDS.length || won) return;
+  won = true;
+  setTimeout(() => {
+    $('winText').innerHTML = `Every kind of place found in <b>${fmtTime(playTime)}</b>.<br>${foundSites.size} places visited · ${gotCrates.size} lost parcels recovered · ${(explCells * EC * EC / 1e6).toFixed(2)} km² charted · ${(odo / 1000).toFixed(1)} km driven.<br>The world goes on. So can you.`;
+    setState('win'); doSave();
+  }, 4500);
 }
 function landTricks() {
   const TAU = Math.PI * 2, rem = ((car.flip % TAU) + TAU) % TAU, rough = rem > 1.3 && rem < TAU - 1.3;
@@ -1589,16 +1621,13 @@ function updateCar(dt) {
   reveal(car.x, car.z);
   for (const l of landmarks) if (!l.found && Math.hypot(l.x - car.x, l.z - car.z) < (l.kind === 'city' ? l.pad - 12 : l.pad + 5)) {
     const fresh = ![...foundSites.values()].includes(l.def.id);
-    l.found = true; foundSites.set(l.id, l.def.id); sfxFound(); doSave();
+    l.found = true; foundSites.set(l.id, l.def.id); sfxFound(); doSave(); netSend({ t: 'fd', id: l.id, k: l.def.id });
     if (l.kind === 'city') toast('CITY REACHED', l.name, l.def.lore, 6.5);
     else toast(fresh ? 'NEW KIND OF PLACE' : 'LANDMARK FOUND', l.def.name, l.def.lore, 6.5);
-    if (new Set(foundSites.values()).size >= KINDS.length && !won) { won = true; setTimeout(() => {
-      $('winText').innerHTML = `Every kind of place found in <b>${fmtTime(playTime)}</b>.<br>${foundSites.size} places visited · ${gotCrates.size} lost parcels recovered · ${(explCells * EC * EC / 1e6).toFixed(2)} km² charted · ${(odo / 1000).toFixed(1)} km driven.<br>The world goes on. So can you.`;
-      setState('win'); doSave();
-    }, 4500); }
+    checkWin();
   }
   for (const c of crates) if (!c.got && Math.abs(c.x - car.x) < 3 && Math.abs(c.z - car.z) < 3 && Math.abs(c.y - car.y) < 4) {
-    c.got = true; gotCrates.add(c.id); sfxCrate();
+    c.got = true; gotCrates.add(c.id); sfxCrate(); netSend({ t: 'cr', id: c.id });
     toast('LOST PARCEL RECOVERED', gotCrates.size + ' so far', '', 2.2);
   }
 }
@@ -1640,63 +1669,86 @@ function landSpot(cx, cz, rmin, rmax, face) {
   return null;
 }
 function spawnNpc(n) {
-  const thief = n.type === 'thief';
-  const s = landSpot(car.x, car.z, thief ? 90 : 190, thief ? 200 : 330, null) || landSpot(car.x, car.z, 60, 340, null);
+  const thief = n.type === 'thief', P = NET.host && remote.alive && Math.random() < 0.5 ? remote : car;      // near one player or the other
+  const s = landSpot(P.x, P.z, thief ? 90 : 190, thief ? 200 : 330, null) || landSpot(P.x, P.z, 60, 340, null);
   if (!s) { n.wait = 3; return; }
   initNpc(n, s[0], s[1], Math.random() * 6.2832);
 }
 function initNpc(n, x, z, h) {
   n.x = x; n.z = z; n.y = groundAt(x, z); n.hs = heightF(x, z); n.h = n.wander = h;
   n.v = n.vx = n.vz = n.vy = n.pitch = n.roll = n.spin = n.stun = n.slowT = n.jink = n.jinkT = n.bumpT = 0;
-  n.alive = true; n.hooked = false; n.hookSlow = 0;
+  n.alive = true; n.hooked = false; n.hookSlow = 0; n.prey = null; n.who = 0;
   n.mode = 'patrol'; n.sees = false; n.seeT = Math.random() * 0.15; n.lostT = n.chaseT = n.searchT = n.patrolT = 0; n.tired = false; n.px = n.lx = x; n.pz = n.lz = z;
 }
 const inCover = () => car.biome === FOREST && Math.hypot(car.vx, car.vz) < 9;     // sitting still or creeping among the trees
-let dayLight = 1;
-function canSee(n, d) {     // can this hunter see the truck: near enough, not in cover, and no hill in the way
+let dayLight = 1, npcSeq = 1;
+function canSee(n, d, P) {     // can this hunter see that player's truck: near enough, not in cover, and no hill in the way
   if (d < 16) return true;
   if (d > 215 * (0.6 + 0.4 * dayLight)) return false;
-  if (d > 38 && inCover()) return false;
-  const ey = n.y + 2.6, cy = car.y + 1.8;
-  for (let k = 1; k < 10; k++) { const t = k / 10; if (groundAt(lerp(n.x, car.x, t), lerp(n.z, car.z, t)) > lerp(ey, cy, t) + 0.4) return false; }
+  if (d > 38 && (P === car ? inCover() : P.cover)) return false;
+  const ey = n.y + 2.6, cy = P.y + 1.8;
+  for (let k = 1; k < 10; k++) { const t = k / 10; if (groundAt(lerp(n.x, P.x, t), lerp(n.z, P.z, t)) > lerp(ey, cy, t) + 0.4) return false; }
   return true;
 }
-function catchThief(n, nx, nz) {
-  caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
-  tumble(n, nx, nz); n.alive = false; n.hooked = false; n.wait = 5;
+function npcEvent(e, m) {      // something a thief or hunter did to this player. The host works these out; for the guest they arrive over the link
+  if (e === 'spotted') { popText('SPOTTED!'); tone(620, 0, 0.18, 'square', 0.05); tone(820, 0.18, 0.18, 'square', 0.05); }
+  else if (e === 'tiring') popText('HUNTER IS TIRING');
+  else if (e === 'lost') { shaken++; popText('HUNTER LOST YOU'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); }
+  else if (e === 'caught') {
+    caught++; popText('THIEF CAUGHT!'); tone(784, 0, 0.12); tone(1175, 0.08, 0.3); shake = Math.max(shake, 0.25);
+    if (hook && hook.npc && hook.npc !== remote) { hook.npc = null; hook.phase = 'back'; }
+  } else if (e === 'wrecked') { wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4); car.vx *= 0.75; car.vz *= 0.75; }
+  else if (e === 'rammed') {
+    rammed++; popText('RAMMED!'); sfxThump(); shake = Math.max(shake, 0.5);
+    car.vx += m.ix; car.vz += m.iz; car.pop = Math.max(car.pop, 7); car.rv += (Math.random() - .5) * 6;
+  }
 }
+const tell = (P, e, m) => { if (P === car) npcEvent(e, m || {}); else netSend({ t: 'ev', e, ...(m || {}) }); };      // let the right player know
 function syncNpcs() {   // make the roster match the options
-  if (race) return;
+  if (race || guestMode()) return;
   for (const [type, on, count] of [['thief', opts.thieves, 4], ['hunter', opts.hunters, 3]]) {
     const have = npcs.filter(n => n.type === type);
     if (!on) { for (const n of have) npcs.splice(npcs.indexOf(n), 1); continue; }
-    for (let i = have.length; i < count; i++) npcs.push({ type, alive: false, wait: type === 'hunter' ? 4 + i * 6 : 0.5 + i * 1.5 });
+    for (let i = have.length; i < count; i++) npcs.push({ id: npcSeq++, type, alive: false, wait: type === 'hunter' ? 4 + i * 6 : 0.5 + i * 1.5 });
   }
 }
-function setOpt(k, v) {
+function setOpt(k, v, fromNet) {      // in a room the switches are shared: either player can flip them
   opts[k] = v;
-  try { if (!NOSAVE) localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) {}
+  try { if (!NOSAVE && !fromNet) localStorage.setItem(OPT_KEY, JSON.stringify(opts)); } catch (e) {}
   $('oThieves').checked = opts.thieves; $('oHunters').checked = opts.hunters;
   syncNpcs(); updateHud();
+  if (!fromNet) netSend({ t: 'opt', k, v });
 }
 $('oThieves').onchange = e => setOpt('thieves', e.target.checked);
 $('oHunters').onchange = e => setOpt('hunters', e.target.checked);
 $('oThieves').checked = opts.thieves; $('oHunters').checked = opts.hunters;
 syncNpcs();
-function tumble(n, nx, nz) {   // send a caught thief or wrecked hunter cartwheeling
+function tumble(n, nx, nz, P = car) {   // send a caught thief or wrecked hunter cartwheeling
   if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
-  props.push({ mesh: n.type === 'thief' ? npcMesh.thief : npcMesh.hunter, shared: true, x: n.x, y: n.y + 0.4, z: n.z, vx: car.vx * 0.8 + nx * 4, vz: car.vz * 0.8 + nz * 4,
+  props.push({ mesh: n.type === 'thief' ? npcMesh.thief : npcMesh.hunter, shared: true, x: n.x, y: n.y + 0.4, z: n.z, vx: P.vx * 0.8 + nx * 4, vz: P.vz * 0.8 + nz * 4,
     vy: 8 + Math.random() * 3, ax: nz, az: -nx, a: 0, av: 7, t: 0, life: 4 });
   for (let i = 0; i < 14; i++) puff(n.x + (Math.random() - .5) * 2, n.y + 1 + Math.random() * 2, n.z + (Math.random() - .5) * 2, i % 3 ? (n.type === 'thief' ? [1, .85, .2] : [.9, .2, .15]) : [1, 1, 1], 0.35, 4, 0.6);
 }
 function updateNpcs(dt) {
+  if (guestMode()) return;           // the host runs them
+  const two = NET.host && remote.alive;
   for (const n of npcs) {
     if (!n.alive) { n.wait -= dt; if (n.wait <= 0) spawnNpc(n); continue; }
-    const thief = n.type === 'thief', rival = n.type === 'rival', dx = car.x - n.x, dz = car.z - n.z, d = Math.hypot(dx, dz) || 1;
-    if (n.hooked) {     // on the end of the grapple: dragged in, spinning, until it reaches the bumper
+    const thief = n.type === 'thief', rival = n.type === 'rival';
+    if (n.hooked === remote && !two) n.hooked = false;
+    if (n.prey === remote && !two) n.prey = null;
+    // each one deals with whichever player is nearer, unless it is on the end of somebody's hook
+    let P = car;
+    if (two && !rival && hyp(remote.x - n.x, remote.z - n.z) < hyp(car.x - n.x, car.z - n.z)) P = remote;
+    if (n.hooked) P = n.hooked === remote ? remote : car;
+    const mine = P === car, dx = P.x - n.x, dz = P.z - n.z, d = Math.hypot(dx, dz) || 1;
+    if (n.hooked) {     // dragged in, spinning, until it reaches the bumper
       const k = Math.min(1, 42 * dt / d); n.x += dx * k; n.z += dz * k; n.vx = dx / d * 42; n.vz = dz / d * 42; n.v = 0;
       n.y += (groundAt(n.x, n.z) + 0.9 - n.y) * Math.min(1, dt * 10); n.h += dt * 9; n.roll = 0.5;
-      if (d < 4.2) { catchThief(n, -dx / d, -dz / d); if (hook) { hook.npc = null; hook.phase = 'back'; } }
+      if (d < 4.2) {
+        tumble(n, -dx / d, -dz / d, P); tell(P, 'caught'); if (mine) netSend({ t: 'fx', id: n.id, nx: -dx / d, nz: -dz / d });
+        n.alive = false; n.hooked = false; n.wait = 5;
+      }
       continue;
     }
     let want = n.h, vt = 0;
@@ -1711,20 +1763,21 @@ function updateNpcs(dt) {
         if (n.jinkT <= 0) { n.jinkT = 0.7 + Math.random() * 1.1; n.jink = (Math.random() - .5) * (d < 32 ? 1.2 : 0.5); }
         want = Math.atan2(-dx, -dz) + (d < 15 ? 0 : n.jink); vt = d < 15 ? 18.5 : 20.5;     // panics in a straight line once you are on its bumper
       } else { n.wander += (Math.random() - .5) * dt * 2; want = n.wander; vt = 7; }
-    } else {      // hunter: patrols until it sees you, chases while it can, then searches where it last saw you
+    } else {      // hunter: patrols until it sees someone, chases while it can, then searches where it last saw them
       if (d > 560) { n.alive = false; n.wait = 2; continue; }
       n.seeT -= dt;
-      if (n.seeT <= 0) { n.seeT = 0.15; n.sees = canSee(n, d); }
+      if (n.seeT <= 0) { n.seeT = 0.15; n.sees = canSee(n, d, P); }
       if (n.stun > 0) n.stun -= dt;
       if (n.sees) {
-        if (n.mode !== 'chase') { n.mode = 'chase'; popText('SPOTTED!'); tone(620, 0, 0.18, 'square', 0.05); tone(820, 0.18, 0.18, 'square', 0.05); }
-        n.lx = car.x; n.lz = car.z; n.lostT = 0;
+        if (n.mode !== 'chase' || n.prey !== P) { tell(P, 'spotted'); n.mode = 'chase'; n.prey = P; }
+        n.lx = P.x; n.lz = P.z; n.lostT = 0;
       } else if (n.mode === 'chase') { n.lostT += dt; if (n.lostT > 3.5) { n.mode = 'search'; n.searchT = 9; } }
+      const prey = n.prey || P; n.who = prey === remote ? 1 : 0;
       if (n.mode === 'chase') {
-        n.chaseT += dt;       // matches your top speed exactly, until it has chased long enough to tire
-        if (!n.tired && n.chaseT > 18) { n.tired = true; popText('HUNTER IS TIRING'); }
+        n.chaseT += dt;       // matches a truck's top speed exactly, until it has chased long enough to tire
+        if (!n.tired && n.chaseT > 18) { n.tired = true; tell(prey, 'tiring'); }
         if (n.stun <= 0) {
-          if (n.sees) { const lead = Math.min(1, d / 40); want = Math.atan2(dx + car.vx * lead, dz + car.vz * lead); } else want = Math.atan2(n.lx - n.x, n.lz - n.z);
+          if (n.sees) { const lead = Math.min(1, d / 40); want = Math.atan2(dx + P.vx * lead, dz + P.vz * lead); } else want = Math.atan2(n.lx - n.x, n.lz - n.z);
           vt = TOPV * (n.tired ? 0.95 : 1);
         }
       } else {
@@ -1733,10 +1786,10 @@ function updateNpcs(dt) {
           n.searchT -= dt;
           if (Math.hypot(n.lx - n.x, n.lz - n.z) > 12) want = Math.atan2(n.lx - n.x, n.lz - n.z); else { n.wander += dt * 1.2; want = n.wander; }
           vt = n.stun > 0 ? 0 : 17;
-          if (n.searchT <= 0) { n.mode = 'patrol'; n.patrolT = 0; shaken++; popText('HUNTER LOST YOU'); [523, 784].forEach((f, i) => tone(f, i * 0.1, 0.3)); }
+          if (n.searchT <= 0) { n.mode = 'patrol'; n.patrolT = 0; tell(prey, 'lost'); n.prey = null; }
         } else {
           n.patrolT -= dt;
-          if (n.patrolT <= 0 || Math.hypot(n.px - n.x, n.pz - n.z) < 15) { n.patrolT = 14 + Math.random() * 10; const s = landSpot(car.x, car.z, 40, 240, null); if (s) { n.px = s[0]; n.pz = s[1]; } }
+          if (n.patrolT <= 0 || Math.hypot(n.px - n.x, n.pz - n.z) < 15) { n.patrolT = 14 + Math.random() * 10; const s = landSpot(P.x, P.z, 40, 240, null); if (s) { n.px = s[0]; n.pz = s[1]; } }
           want = Math.atan2(n.px - n.x, n.pz - n.z); vt = n.stun > 0 ? 0 : 11;
         }
       }
@@ -1786,20 +1839,21 @@ function updateNpcs(dt) {
     n.spin += n.v / 0.5 * dt;
     if (WATER - n.y > 1.6) { if (rival) relocate(n); else { n.alive = false; n.wait = 2; } continue; }
     if (Math.abs(n.v) < 2 && vt > 5) { n.slowT += dt; if (n.slowT > 3) { if (rival) relocate(n); else { n.alive = false; n.wait = 1.5; } continue; } } else n.slowT = 0;
-    // contact with the player
-    if (d < 3.9 && Math.abs(n.y - car.y) < 4) {
+    // contact with the nearer player
+    if (d < 3.9 && Math.abs(n.y - P.y) < 4) {
       const nx = -dx / d, nz = -dz / d;      // from the player towards the npc
       if (rival) {       // rubbing is racing
         if (n.bumpT <= 0) { n.bumpT = 0.6; car.vx -= nx * 5; car.vz -= nz * 5; n.x += nx * 1.2; n.z += nz * 1.2; n.v *= 0.85; car.pop = Math.max(car.pop, 3); sfxThump(); shake = Math.max(shake, 0.25); }
-      } else if (thief) catchThief(n, nx, nz);
-      else {
-        const vp = car.vx * nx + car.vz * nz, vn = -(n.vx * nx + n.vz * nz);     // who was closing harder
+      } else if (thief) {
+        tumble(n, nx, nz, P); tell(P, 'caught'); if (mine) netSend({ t: 'fx', id: n.id, nx, nz });
+        n.alive = false; n.wait = 5;
+      } else {
+        const vp = P.vx * nx + P.vz * nz, vn = -(n.vx * nx + n.vz * nz);     // who was closing harder
         if (n.stun > 0 ? vp > 7 : (vp > vn + 2 && vp > 9)) {     // a stunned or snagged hunter is there for the taking
-          wrecked++; popText('HUNTER WRECKED!'); sfxCrunch(); tone(196, 0, 0.3, 'sawtooth', 0.08); shake = Math.max(shake, 0.4);
-          car.vx *= 0.75; car.vz *= 0.75; tumble(n, nx, nz); n.alive = false; n.wait = 10;
+          tumble(n, nx, nz, P); tell(P, 'wrecked'); if (mine) netSend({ t: 'fx', id: n.id, nx, nz });
+          n.alive = false; n.wait = 10;
         } else if (n.stun <= 0) {
-          rammed++; popText('RAMMED!'); sfxThump(); shake = Math.max(shake, 0.5);
-          car.vx += -nx * 12 + n.vx * 0.35; car.vz += -nz * 12 + n.vz * 0.35; car.pop = Math.max(car.pop, 7); car.rv += (Math.random() - .5) * 6;
+          tell(P, 'rammed', { ix: -nx * 12 + n.vx * 0.35, iz: -nz * 12 + n.vz * 0.35 });
           n.stun = 2.6; n.v = -5;
         }
       }
@@ -1827,7 +1881,7 @@ function hookSnags(x, y, z) {     // does the flying hook bite into scenery here
 function fireHook() {
   if (state !== 'play') return;
   if (hook) { if (hook.phase === 'pull' && hook.t > 0.2) releaseHook(); return; }     // press again to let go early
-  if (hookCd > 0) return;
+  if (hookCd > 0) { tone(140, 0, 0.08, 'square', 0.04); return; }      // still recharging
   const fx = Math.sin(car.h), fz = Math.cos(car.h), ox = car.x + fx * 1.2, oy = car.y + 2.4, oz = car.z + fz * 1.2;
   let tgt = null, best = 0.5;       // aim assist: whoever is nearest the truck's nose, inside a cone ahead
   for (const n of remote.alive ? [...npcs, remote] : npcs) if (n.alive && !n.hooked) {
@@ -1839,18 +1893,20 @@ function fireHook() {
   let vx = fx * 0.985, vy = 0.17, vz = fz * 0.985;
   if (tgt) { const dx = tgt.x - ox, dy = tgt.y + 1.2 - oy, dz = tgt.z - oz, l = Math.hypot(dx, dy, dz) || 1; vx = dx / l; vy = dy / l; vz = dz / l; }
   hook = { phase: 'fly', x: ox, y: oy, z: oz, vx: vx * 100 + car.vx, vy: vy * 100, vz: vz * 100 + car.vz, t: 0, tgt, npc: null, hold: 0 };
+  hookCd = 15;      // one throw every fifteen seconds
   tone(900, 0, 0.09, 'sawtooth', 0.05); tone(500, 0.05, 0.12, 'sawtooth', 0.04);
 }
 function releaseHook() {
   if (!hook) return;
-  if (hook.npc) hook.npc.hooked = false;
-  hook.npc = null; hook.phase = 'back'; hookCd = Math.max(hookCd, 0.9);
+  if (hook.npc) { if (guestMode() && hook.npc.type === 'thief') netSend({ t: 'hk', id: hook.npc.id, off: 1 }); hook.npc.hooked = false; }
+  hook.npc = null; hook.phase = 'back';
 }
 function hookNpc(n) {
   hook.npc = n; hook.phase = 'reel'; hook.t = 0; tone(240, 0, 0.12, 'square', 0.08); shake = Math.max(shake, 0.15);
-  if (n.type === 'thief') { n.hooked = true; hook.hold = 6; hookCd = 2; popText('HOOKED!'); }
-  else if (n.type === 'hunter') { n.stun = 6; n.v = 0; hook.hold = 0.5; hookCd = 3; popText('HUNTER SNAGGED — RAM IT'); }
-  else { n.hookSlow = 1.7; n.v = -6; hook.hold = 0.5; hookCd = 4; popText('YANKED!'); }
+  if (guestMode()) netSend({ t: 'hk', id: n.id });      // the host does the reeling and the stunning
+  if (n.type === 'thief') { n.hooked = car; hook.hold = 6; popText('HOOKED!'); }
+  else if (n.type === 'hunter') { n.stun = 6; n.v = 0; hook.hold = 0.5; popText('HUNTER SNAGGED — RAM IT'); }
+  else { n.hookSlow = 1.7; n.v = -6; hook.hold = 0.5; popText('YANKED!'); }
 }
 function updateHook(dt) {
   if (hookCd > 0) hookCd -= dt;
@@ -1862,7 +1918,7 @@ function updateHook(dt) {
     for (let s = 0; s < 3; s++) {
       h.x += h.vx * dt / 3; h.y += h.vy * dt / 3; h.z += h.vz * dt / 3;
       if (remote.alive && Math.hypot(remote.x - h.x, remote.z - h.z) < 2.6 && Math.abs(remote.y + 1.2 - h.y) < 3) {
-        netSend({ t: 'y' }); h.npc = remote; h.phase = 'reel'; h.t = 0; h.hold = 0.6; hookCd = 3; popText('HOOKED YOUR FRIEND'); tone(240, 0, 0.12, 'square', 0.08); return;
+        netSend({ t: 'y' }); h.npc = remote; h.phase = 'reel'; h.t = 0; h.hold = 0.6; popText('HOOKED YOUR FRIEND'); tone(240, 0, 0.12, 'square', 0.08); return;
       }
       for (const n of npcs) if (n.alive && Math.hypot(n.x - h.x, n.z - h.z) < 2.4 && Math.abs(n.y + 1.2 - h.y) < 3) { hookNpc(n); return; }
       const g = groundAt(h.x, h.z);
@@ -1872,7 +1928,7 @@ function updateHook(dt) {
         return;
       }
     }
-    if (Math.hypot(h.x - cx, h.z - cz) > 80) { h.phase = 'back'; hookCd = 0.6; }
+    if (Math.hypot(h.x - cx, h.z - cz) > 80) h.phase = 'back';
   } else if (h.phase === 'pull') {
     const dx = h.x - cx, dy = h.y - cy, dz = h.z - cz, D = Math.hypot(dx, dy, dz) || 1;
     if (D < 5.5 || h.t > 3) { releaseHook(); car.pop = Math.max(car.pop, 5); return; }
@@ -1883,7 +1939,7 @@ function updateHook(dt) {
     else car.vy += (uy * 50 + GRAV * 0.75) * dt;
   } else if (h.phase === 'reel') {
     const n = h.npc;
-    if (!n || !n.alive) { hook = null; return; }
+    if (!n || !n.alive) { h.npc = null; h.phase = 'back'; return; }
     h.x = n.x; h.y = n.y + 1.2; h.z = n.z; h.hold -= dt;
     if (h.hold <= 0) releaseHook();
   } else {
@@ -1965,8 +2021,6 @@ function updateRace(dt) {
 // ───────────────────────── multiplayer: two players, connected directly ─────────────────────────
 // Both players open the same room link. Their browsers find each other through a public WebRTC broker, then talk peer to peer; there is no game server.
 // Whoever arrives first is the host. Each player runs their own truck, thieves and hunters; what is shared is the world, where the trucks are, what gets flattened, and races.
-const NET = { ws: null, pc: null, dc: null, host: false, status: ROOM ? 'Connecting…' : '', beat: 0, sendT: 0, retry: 0, fell: [], pend: [], cid: '', clock: performance.now(), lastRx: 0 };
-const remote = { type: 'friend', alive: false, x: 0, y: 0, z: 0, h: 0, pitch: 0, roll: 0, flip: 0, steer: 0, spin: 0, sy: 0, v: 0, hk: null, t: null, ghosts: [] };
 const HOST_ID = 'vxd-' + ROOM + '-host';
 function netSend(m) { if (NET.dc && NET.dc.readyState === 'open') NET.dc.send(JSON.stringify(m)); }
 function netSignal(type, dst, payload) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ type, dst, payload })); }
@@ -2002,8 +2056,9 @@ function netChannel(dc) {
   NET.dc = dc;
   dc.onopen = () => {
     NET.lastRx = performance.now(); NET.status = 'Connected'; NET.fell = [...felled].slice(-4000);
-    netSend({ t: 'hi', seed: SEED, v: 1 });
-    toast('FRIEND CONNECTED', 'You share this world', 'Blue truck, blue dot on the map. Press 3 to race each other.', 5); [523, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.3));
+    if (!NET.host) npcs.length = 0;      // the guest hands over to the host's thieves and hunters
+    netSend({ t: 'hi', seed: SEED, v: 2, found: [...foundSites], crates: [...gotCrates], o: NET.host ? { thieves: opts.thieves, hunters: opts.hunters } : null });
+    toast('FRIEND CONNECTED', 'You share this world', 'Same waypoint, same thieves and hunters, and a find counts for both of you. Press 3 to race.', 6); [523, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.3));
   };
   dc.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } netRecv(m); };
   dc.onclose = () => { if (NET.dc === dc) netGone(); };
@@ -2026,22 +2081,60 @@ function netGone() {      // the friend left or the link dropped
     toast('FRIEND LEFT', 'The link dropped', 'It reconnects by itself if they come back.', 4);
     if (race && race.mp) { race = null; syncNpcs(); pickTarget(); }
   }
-  remote.alive = false; remote.t = null; remote.ghosts.length = 0; NET.dc = null;
+  const wasGuest = !NET.host;
+  remote.alive = false; remote.t = null; NET.dc = null;
+  if (wasGuest) { npcs.length = 0; syncNpcs(); }      // on your own again: your own thieves and hunters
   if (NET.pc) { NET.pc.onconnectionstatechange = null; try { NET.pc.close(); } catch (e) {} NET.pc = null; }
   if (NET.host && NET.ws && NET.ws.readyState === 1) NET.status = 'Waiting for your friend…'; else { NET.status = 'Reconnecting…'; NET.retry = 3; }
+}
+const MODES = ['patrol', 'chase', 'search'];
+function mirrorNpcs(list) {      // the guest's copy of the host's thieves and hunters
+  const old = new Map(npcs.map(n => [n.id, n]));
+  npcs.length = 0;
+  for (const a of list) {
+    let n = old.get(a[0]);
+    if (n) old.delete(a[0]); else n = { id: a[0], x: a[2], y: a[3], z: a[4], h: a[5], pitch: a[6], roll: a[7], spin: 0, alive: true, hooked: false, stun: 0 };
+    n.type = a[1] ? 'hunter' : 'thief'; n.t = a; n.mode = MODES[a[8]]; n.who = a[9]; n.tired = !!a[10]; n.v = a[11]; n.vx = Math.sin(a[5]) * a[11]; n.vz = Math.cos(a[5]) * a[11];
+    npcs.push(n);
+  }
+  for (const n of old.values()) n.alive = false;      // anything it no longer lists is gone
 }
 function netRecv(m) {
   NET.lastRx = performance.now();
   if (m.t === 'bye') { netGone(); return; }
-  if (m.t === 's') {      // where the friend's truck is, plus anything they flattened and the thieves and hunters around them
+  if (m.t === 's') {      // where the friend's truck is, plus anything they flattened; from the host, also the time of day and the thieves and hunters
     if (!remote.t) { remote.x = m.p[0]; remote.y = m.p[1]; remote.z = m.p[2]; remote.h = m.p[3]; }
-    remote.alive = true; remote.t = m.p; remote.hk = m.k || null;
+    remote.alive = true; remote.t = m.p; remote.hk = m.k || null; remote.cover = !!m.c;
+    remote.vx = Math.sin(m.p[3]) * m.p[9]; remote.vz = Math.cos(m.p[3]) * m.p[9];
     if (m.d != null) tod = m.d;
     if (m.f) for (const key of m.f) if (!felled.has(key)) { felled.add(key); const [wx, wz] = key.split(',').map(Number); dirty.add(ckey(wx >> 4, wz >> 4)); }
-    const g = remote.ghosts; g.length = m.n.length;
-    m.n.forEach((a, i) => { const o = g[i] || (g[i] = { x: a[1], y: a[2], z: a[3], h: a[4] }); o.hunter = a[0]; o.t = a; });
+    if (m.n && !NET.host && !race) mirrorNpcs(m.n);
   } else if (m.t === 'hi') {
-    if (m.seed !== SEED) toast('DIFFERENT WORLDS', 'Open the same invite link', 'Your friend is in another world. Both of you need the same link.', 9);
+    if (m.v !== 2) toast('DIFFERENT VERSIONS', 'Both refresh the page', 'One of you has an older copy of the game loaded.', 9);
+    else if (m.seed !== SEED) toast('DIFFERENT WORLDS', 'Open the same invite link', 'Your friend is in another world. Both of you need the same link.', 9);
+    for (const [id, kind] of m.found || []) foundSites.set(id, kind);      // what either of you has found or picked up counts for both
+    for (const id of m.crates || []) gotCrates.add(id);
+    if (m.o && !NET.host) { setOpt('thieves', m.o.thieves, true); setOpt('hunters', m.o.hunters, true); }
+    refreshActive(true); pickTarget(); updateHud(); checkWin();
+  } else if (m.t === 'fd') {      // the friend found a place
+    if (foundSites.has(m.id)) return;
+    foundSites.set(m.id, m.k); refreshActive(true); pickTarget(); doSave();
+    const d = KINDS.find(d => d.id === m.k);
+    toast('YOUR FRIEND FOUND A PLACE', d ? d.name : 'Somewhere new', 'It counts for both of you.', 4.5); tone(784, 0, 0.2); tone(1047, 0.12, 0.3);
+    checkWin();
+  } else if (m.t === 'cr') { gotCrates.add(m.id); for (const c of crates) if (c.id === m.id) c.got = true; }
+  else if (m.t === 'tg') {      // the friend switched waypoint
+    const [rx, rz] = String(m.id).split(',').map(Number), st = siteOf(rx, rz);
+    if (st && st.def) { st.found = foundSites.has(st.id); pinned = target = st; toast('WAYPOINT', whereText(st), 'Your friend picked a new one for you both.', 3.5); }
+  } else if (m.t === 'opt') { setOpt(m.k, !!m.v, true); toast(m.k === 'thieves' ? 'PARCEL THIEVES' : 'HUNTER TRUCKS', m.v ? 'On' : 'Off', 'Your friend flipped the switch.', 2.5); }
+  else if (m.t === 'ev') npcEvent(m.e, m);      // a thief or hunter did something to this player
+  else if (m.t === 'fx') { const n = npcs.find(n => n.id === m.id); if (n) tumble(n, m.nx, m.nz, remote); }      // the friend caught or wrecked one: show it go
+  else if (m.t === 'hk') {      // the guest's hook landed on one of the host's thieves or hunters
+    const n = npcs.find(n => n.id === m.id && n.alive);
+    if (!n || !NET.host) return;
+    if (m.off) { if (n.hooked === remote) n.hooked = false; }
+    else if (n.type === 'thief') n.hooked = remote;
+    else if (n.type === 'hunter') { n.stun = 6; n.v = 0; }
   } else if (m.t === 'y') {      // the friend's grappling hook landed on this truck
     car.vx *= 0.25; car.vz *= 0.25; car.pop = Math.max(car.pop, 6); shake = Math.max(shake, 0.5); car.rv += (Math.random() - .5) * 6; popText('HOOKED BY YOUR FRIEND'); sfxThump();
   } else if (m.t === 'rq') { if (NET.host && !race) startRace(); }
@@ -2062,29 +2155,35 @@ function netPump() {      // runs on a timer, not the frame loop, so a player wh
   if (now - NET.lastRx > 15000) { netGone(); return; }      // nothing heard for a quarter of a minute: they are gone
   const r = v => Math.round(v * 100) / 100;
   const m = { t: 's', p: [r(car.x), r(car.y), r(car.z), r(car.h), r(car.pitch), r(car.roll), r(car.flip), r(car.steer), r(car.sy), r(state === 'play' ? car.vF : 0)], k: hook ? [r(hook.x), r(hook.y), r(hook.z)] : 0,
-    n: npcs.filter(n => n.alive && n.type !== 'rival').map(n => [n.type === 'hunter' ? 1 : 0, r(n.x), r(n.y), r(n.z), r(n.h)]) };
-  if (NET.host) m.d = Math.round(tod * 1e4) / 1e4;       // the host's clock sets the time of day for both
+    c: inCover() ? 1 : 0 };
+  if (NET.host) {      // the host's clock sets the time of day for both, and its thieves and hunters are the ones both players see
+    m.d = Math.round(tod * 1e4) / 1e4;
+    m.n = npcs.filter(n => n.alive && n.type !== 'rival').map(n => [n.id, n.type === 'hunter' ? 1 : 0, r(n.x), r(n.y), r(n.z), r(n.h), r(n.pitch), r(n.roll), n.mode === 'chase' ? 1 : n.mode === 'search' ? 2 : 0, n.who | 0, n.tired ? 1 : 0, r(n.v)]);
+  }
   if (NET.fell.length) { m.f = NET.fell; NET.fell = []; }
   netSend(m);
 }
-function netTick(dt) {      // every frame: ease the friend's truck towards where it was last reported, carrying it forward at its speed in between
+function netTick(dt) {      // every frame: ease the friend's truck (and, for the guest, the host's thieves and hunters) towards where they were last reported
   if (!remote.alive || !remote.t) return;
   const t = remote.t, k = Math.min(1, dt * 12);
-  t[0] += Math.sin(t[3]) * t[9] * dt; t[2] += Math.cos(t[3]) * t[9] * dt;
+  t[0] += Math.sin(t[3]) * t[9] * dt; t[2] += Math.cos(t[3]) * t[9] * dt;      // carried forward at its speed in between reports
   if (Math.hypot(t[0] - remote.x, t[2] - remote.z) > 40) { remote.x = t[0]; remote.y = t[1]; remote.z = t[2]; }
   remote.x += (t[0] - remote.x) * k; remote.y += (t[1] - remote.y) * k; remote.z += (t[2] - remote.z) * k; remote.h += angDiff(t[3], remote.h) * k;
   remote.pitch += (t[4] - remote.pitch) * k; remote.roll += (t[5] - remote.roll) * k; remote.flip = Math.abs(t[6] - remote.flip) > 3 ? t[6] : remote.flip + (t[6] - remote.flip) * k;
   remote.steer = t[7]; remote.sy = t[8]; remote.v = t[9]; remote.spin += t[9] / 0.6 * dt;
-  for (const o of remote.ghosts) if (o.t) { o.x += (o.t[1] - o.x) * k; o.y += (o.t[2] - o.y) * k; o.z += (o.t[3] - o.z) * k; o.h += angDiff(o.t[4], o.h) * k; }
+  if (guestMode()) for (const n of npcs) if (n.t) {
+    const a = n.t; a[2] += Math.sin(a[5]) * a[11] * dt; a[4] += Math.cos(a[5]) * a[11] * dt;
+    n.x += (a[2] - n.x) * k; n.y += (a[3] - n.y) * k; n.z += (a[4] - n.z) * k; n.h += angDiff(a[5], n.h) * k; n.pitch += (a[6] - n.pitch) * k; n.roll += (a[7] - n.roll) * k; n.spin += a[11] / 0.5 * dt;
+  }
 }
 $('bFriend').onclick = () => {
-  if (!ROOM) { location.href = location.pathname + '?room=' + Math.random().toString(36).slice(2, 7) + '&seed=' + SEED; return; }      // open a fresh room on this world
-  const link = location.origin + location.pathname + '?room=' + ROOM + '&seed=' + SEED;
+  if (!ROOM) { location.href = location.pathname + '?room=' + Math.random().toString(36).slice(2, 7); return; }      // open a fresh room
+  const link = location.origin + location.pathname + '?room=' + ROOM;
   (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => { $('mpInfo').textContent = 'Invite link copied. Send it to your friend.'; }, () => { $('mpInfo').textContent = link; });
 };
 if (ROOM) {
   $('bFriend').textContent = 'Copy invite link'; $('bRace').textContent = 'Race your friend';
-  $('mpInfo').textContent = 'Room ' + ROOM + '. Send your friend the link, then both press Start. You will see each other as soon as you are both in.';
+  $('mpInfo').textContent = 'Room ' + ROOM + '. Press Copy invite link and send it to your friend. Only one of you makes the room; the other just opens the link.';
   if (!save) { car.x += (Math.random() - .5) * 12; car.z += (Math.random() - .5) * 12; settle(); }      // do not start parked inside each other
   netStart(); setInterval(netPump, 66);
   addEventListener('pagehide', () => netSend({ t: 'bye' }));      // tell the friend straight away when this tab closes
@@ -2191,11 +2290,6 @@ function render(time) {
     WHEELS.forEach(([lx, lz], i) => draw(carMesh.wheel, mulN(fm, T(lx, 0.6, lz), RY(i < 2 ? remote.steer * 0.45 : 0), RX(remote.spin))));
     if (remote.hk) { draw(cubeMesh, segMat([remote.x, remote.y + 2.2, remote.z], remote.hk, 0.1), { tint: [.9, .85, .7], emis: 0.5 }); draw(cubeMesh, mulN(T(remote.hk[0], remote.hk[1], remote.hk[2]), Sc(.5, .5, .5)), { tint: [.3, .3, .36], emis: 0.3 }); }
     if (Math.hypot(remote.x - car.x, remote.z - car.z) > 18) draw(cubeMesh, mulN(T(remote.x, remote.y + 5.6 + Math.sin(time * 4) * 0.3, remote.z), RY(time * 2), RZ(0.785), RX(0.785), Sc(.6, .6, .6)), { emis: 1, tint: [.25, .6, 1] });
-    for (const o of remote.ghosts) {      // the thieves and hunters around your friend: you can see them, but they are your friend's to deal with
-      const nm = mulN(T(o.x, o.y, o.z), RY(o.h)), th = !o.hunter, ws = th ? 0.8 : 1;
-      draw(th ? npcMesh.thief : npcMesh.hunter, nm); draw(th ? npcMesh.headT : npcMesh.headH, nm, { emis: 1 });
-      for (const [lx, lz] of th ? TWHEELS : WHEELS) draw(carMesh.wheel, mulN(nm, T(lx, 0.6 * ws, lz), Sc(ws, ws, ws)));
-    }
   }
   // thieves and hunters
   for (const n of npcs) {
