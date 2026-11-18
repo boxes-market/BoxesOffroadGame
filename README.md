@@ -27,7 +27,7 @@ Then go to `http://localhost:8090`.
 | E | Hop. In the air, A / D spins, and Space with W / S flips |
 | T | Switch to the next waypoint |
 | 1 / 2 | Turn parcel thieves / hunter trucks on or off |
-| 3 | Start or leave race mode |
+| 3 | Race: next to a pack of street racers, race them; at a racetrack, line up on the grid; anywhere else, race mode against a thief |
 | J / M | Journal of places to find / map of everywhere you have been |
 | C / R | Camera distance / recover the truck |
 | H / V | Horn / mute |
@@ -35,7 +35,7 @@ Then go to `http://localhost:8090`.
 ## What is in it
 
 - **An endless world:** the world has no edge. It is generated a region at a time from a seed as you drive: grassland, forest, desert, snowfields, mountains, canyon country, alpine valleys, seas and cities. "New world" on the start screen generates a different one. Add `?seed=1234` to the address to pick one.
-- **Places to find:** every region has a landmark, a city, or a road junction. There are fourteen kinds of place in all, and more of each the further you go. A waypoint arrow points to the nearest one you have not found, and the map fills in as you drive.
+- **Places to find:** every region has a landmark, a city, or a road junction. There are fifteen kinds of place in all, and more of each the further you go. A waypoint arrow points to the nearest one you have not found, and the map fills in as you drive.
 - **Canyon country:** red tablelands cut by deep, winding gorges with a river along the bottom, narrower slots off to the sides, rock spires on the floor and natural bridges overhead. The walls are cliffs: a truck gets in where a gorge opens out or a road comes down. On the wings, the gorges are for flying through. There is always canyon country west of the start.
 - **Alpine country:** the green version of the canyons. Wide valleys with a river or a deep lake along the floor, flower meadows, timber chalets, a belt of pines on the slopes, then rock and snow. Cows and goats graze the meadows, and the bigger lakes have boats. There is always alpine country south-east of the start.
 - **Big mountains:** peaks well over 100 m, ringed with cliff bands. A cliff is a wall however fast it is hit, and on steep ground the tyres spin instead of climbing, more so on snow and sand than on rock. Each mountain has three gullies that wind from foot to summit with no cliffs in them: a worn track marked with orange flags. Ordinary hills have cliff bands too, in patches. There is always a big mountain north of the start.
@@ -47,12 +47,15 @@ Then go to `http://localhost:8090`.
 - **Glitter bombs:** in flight, G drops one (three at a time, one back every five seconds). Where it lands is yassified for good: pink sparkling ground, flowers, blossom trees, pink buildings with every window lit. A thief or hunter caught in it twirls, sparkles and is out of the game.
 - **Grow ops:** some regions hold a fenced compound of plastic tunnels and plant rows around a yard of water tanks, a trailer and a generator. The fence and the plants give way to a truck; the tunnels do not.
 - **Animals:** herds of sheep and deer on the grass, deer in the forest, camels in the desert, goats in the highlands and canyons, cows in the alpine meadows, penguins on the snow. They graze, wander, and bolt from anything on wheels. Hit one and it is bowled over, gets up and runs.
-- **Boats:** fishing boats, sailing boats and speedboats on the lakes and seas, each on its own circuit. They do not stop for a low-flying truck.
+- **On the water:** fishing boats, sailing boats and speedboats on the lakes and seas; out on deep water, pirate ships, submarines that surface and dive again, whales that come up to blow, and shark fins circling. Fly near a pirate ship and it fires broadsides at you. Nothing out there stops for a low-flying truck.
+- **Lighthouses:** striped towers on rocks off the headlands, with a beam that sweeps round after dark.
+- **Street racers:** packs of racing cars out on the roads all the time, each a different crowd: The Street Kings are quick, The Sunday Club and The Learner Drivers are not, and The Pub Crawl weave about, hiccup and spin out. They follow the road network from place to place and pick a new road at every junction. Pull up alongside a pack and press 3 to race them to a green finish beam about 900 m down the road.
+- **Racetracks:** a circuit with kerbs, a gantry with start lights and a packed grandstand, and six drivers lapping it: an ace, a good driver, an average one, a poor one who runs wide, and two drunks. Press 3 there to line up on the grid for five laps. There is always a racetrack north-west of the start.
 - **Parcel thieves:** yellow buggies that run when you get close. Touch one to catch it.
 - **Hunter trucks:** black trucks that patrol and hunt by sight. Their red light shows from a long way off, and at night so do their headlights (and the thieves'). Break line of sight behind a hill, or creep through forest, and they lose you. They match your top speed, then tire to 95% after a long chase.
 - **Grappling hook:** one throw every 15 seconds. Hit a thief to reel it in, or a hunter to stun it so you can ram it. Miss, and the hook bites into whatever it lands on and drags the truck to it.
 - **Race mode:** one waypoint opens the same distance from you and a thief. First there scores, first to 5 wins.
-- **Two players:** press "Play with a friend" on the start screen, then "Copy invite link" and send it. Only one of you makes the room; the other just opens the link. You then share one game: the same world (set by the room code), the same waypoint, one set of thieves and hunters that go for whichever of you is nearer, and finds and parcels that count for both. Herds and boats are in the same places for both of you, though each of you sees the animals move in your own way. You see each other's trucks (theirs is blue), can bump and hook each other, and key 3 races your friend instead of the thief. A room keeps its own save.
+- **Two players:** press "Play with a friend" on the start screen, then "Copy invite link" and send it. Only one of you makes the room; the other just opens the link. You then share one game: the same world (set by the room code), the same waypoint, one set of thieves and hunters that go for whichever of you is nearer, and finds and parcels that count for both. Herds, boats and lighthouses are in the same places for both of you, though each of you sees the animals move in your own way. Street racers, racetrack drivers and pirate cannon fire are each player's own. You see each other's trucks (theirs is blue), can bump and hook each other, and key 3 races your friend instead of the thief. A room keeps its own save.
 
 ## How two players connect
 

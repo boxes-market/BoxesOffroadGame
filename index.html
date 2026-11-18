@@ -77,7 +77,7 @@
 <div id="hud">
   <div id="stats" class="panel">
     <div class="title">VOXEL DRIVER</div>
-    <div><b id="sFound">0</b> places found · <b id="sKinds">0</b>/14 kinds</div>
+    <div><b id="sFound">0</b> places found · <b id="sKinds">0</b>/<span id="sKindsN">15</span> kinds</div>
     <div><b id="sCrates">0</b> lost parcels</div>
     <div><b id="sExpl">0</b> km² charted</div>
     <div><b id="sKm">0.0</b> km driven</div>
@@ -116,7 +116,7 @@
 <div id="ovStart" class="ov on"><div class="card panel">
   <h1>VOXEL DRIVER</h1>
   <p>An off-road expedition across an endless, procedurally generated voxel world: grassland, forest, desert, snowfields,
-  mountains, seas and cities, with no edge to reach. There are fourteen kinds of place to find, and always more of them further out.
+  mountains, seas and cities, with no edge to reach. There are fifteen kinds of place to find, and always more of them further out.
   Follow the waypoint arrow or pick your own line. Roads link every place and are quicker; side trails break off to quiet dead ends.</p>
   <div class="keys">
     <span>W A S D / arrows</span><span>Drive and steer</span>
@@ -130,7 +130,7 @@
     <span>J · M</span><span>Journal of places to find · map of everywhere you have been</span>
     <span>C · R</span><span>Camera distance · recover the truck if you get stuck</span>
     <span>1 · 2</span><span>Switch parcel thieves · hunter trucks on or off while driving</span>
-    <span>3</span><span>Race mode: one waypoint opens the same distance from you and a thief (or your friend, in a room). First there scores, first to 5 wins.</span>
+    <span>3</span><span>Race mode: one waypoint opens the same distance from you and a thief (or your friend, in a room). First there scores, first to 5 wins. At a racetrack, 3 puts you on the grid for five laps against the drivers there; next to a pack of street racers, it races them down the road.</span>
   </div>
   <div class="row" style="margin-top:4px">
     <label class="opt"><input type="checkbox" id="oThieves"> Parcel thieves to chase down</label>
@@ -248,10 +248,10 @@ function lookAt(e, c, u) {
 // ───────────────────────── world ─────────────────────────
 // The world has no edge. It is cut into regions, and everything in a region (its site, roads, parcels) is generated from the seed when first needed.
 const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 18, RW = 7.5;      // RW: half the width of a road
-const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9, ALPS = 10;
-const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon', 'Alpine meadow'];
-const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28], [.33, .68, .27]];
-const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22], [.7, .38, .24], [.46, .34, .23]];
+const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9, ALPS = 10, TRACK = 11;
+const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon', 'Alpine meadow', 'Racetrack'];
+const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28], [.33, .68, .27], [.36, .62, .26]];
+const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22], [.7, .38, .24], [.46, .34, .23], [.5, .36, .24]];
 const DEEPC = [.42, .42, .45], LINEC = [.93, .9, .78], PARAC = [.6, .6, .62];
 const ROADC = TOPC.map((c, i) => mix3(c, i === SNOW ? [.74, .74, .78] : [.58, .52, .43], 0.8));
 let landmarks = [], crates = [], lmObs = [];      // the sites, parcels and landmark obstacles in the regions around the truck
@@ -427,7 +427,7 @@ function naturalBiome(x, z, h) {
 }
 function biomeAt(x, z, h) {
   const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH);
-  if (st && (st.kind === 'city' || st.kind === 'grow') && h >= SEA && hyp(x - st.x, z - st.z) < st.pad) return st.kind === 'city' ? CITY : GROW;
+  if (st && (st.kind === 'city' || st.kind === 'grow' || st.kind === 'track') && h >= SEA && hyp(x - st.x, z - st.z) < st.pad) return st.kind === 'city' ? CITY : st.kind === 'grow' ? GROW : TRACK;
   return naturalBiome(x, z, h);
 }
 // A city is a grid of streets 40 apart and 8 wide, a ring road round the edge, and blocks of four lots between.
@@ -460,7 +460,8 @@ function onStreet(x, z) {
   if (d > st.pad - 9) return true;
   return (Math.floor(x) - Math.floor(st.x) + 4000) % 40 < 8 || (Math.floor(z) - Math.floor(st.z) + 4000) % 40 < 8;
 }
-const onRoad = (x, z) => roadDist(x, z) < RW || onStreet(x, z);
+const onRoad = (x, z) => roadDist(x, z) < RW || onStreet(x, z) || onTrack(x, z);
+function onTrack(x, z) { const st = siteOf(Math.floor(x) >> RSH, Math.floor(z) >> RSH); return !!st && st.kind === 'track' && trackD(st, x, z) < 8.8; }
 const COAST8 = [[1, 0], [.7071067811865476, .7071067811865476], [0, 1], [-.7071067811865476, .7071067811865476], [-1, 0], [-.7071067811865476, -.7071067811865476], [0, -1], [.7071067811865476, -.7071067811865476]];
 function isCoast(x, z) {
   for (const [dx, dz] of COAST8) if (baseHeight(x + dx * 26, z + dz * 26) < SEA - 1) return true;
@@ -637,19 +638,24 @@ const LM_DEFS = [
 // ───────────────────────── regions: sites, roads, parcels ─────────────────────────
 const GROW_DEF = { id: 'grow', name: 'A grow op', lore: 'Plastic tunnels, water tanks, and a generator that never stops.', hint: 'Rows of white tunnels behind a fence, a long way from town.', pad: 105 };
 const CITY_DEF = { id: 'city', name: 'A city', lore: 'Streets, towers, and windows lit by somebody else.', hint: 'Towers on the horizon, and lit windows after dark.', pad: 150 };
-const KINDS = [...LM_DEFS, CITY_DEF, GROW_DEF];
+const TRACK_DEF = { id: 'track', name: 'A racetrack', lore: 'A ribbon of tarmac, a packed grandstand, and drivers of every standard: some quick, some not, and some who should not be driving at all.', hint: 'Engines howling round in circles, and a grandstand by the start line.', pad: 118 };
+const KINDS = [...LM_DEFS, CITY_DEF, GROW_DEF, TRACK_DEF];
+const TRACK_A = ['Voxley', 'Carrow', 'Dunmore', 'Ashby', 'Quill', 'Marlow', 'Tessel', 'Orrin', 'Brandt'], TRACK_B = ['Raceway', 'Speedway', 'Circuit', 'Motor Park', 'Ring'];
+const TR0 = [-1, -1];      // there is always a racetrack in this region, near the start
+const trackSite = (base, rx, rz) => ({ ...base, kind: 'track', def: TRACK_DEF, pad: 118, blend: 55, name: TRACK_A[Math.floor(hash2(rx, rz, 523) * TRACK_A.length)] + ' ' + TRACK_B[Math.floor(hash2(rx, rz, 524) * TRACK_B.length)] });
 const CITY_A = ['Port', 'New', 'Fort', 'Lower', 'Saint', 'Old', 'East', 'Mount'], CITY_B = ['Larkin', 'Dunmore', 'Voxley', 'Carrow', 'Ashby', 'Quill', 'Marlow', 'Tessel', 'Brandt', 'Orrin'];
 function makeSite(rx, rz) {
   const start = rx === 0 && rz === 0, city = !start && ((rx === 1 && rz === 0) || hash2(rx, rz, 503) < 0.17);      // the region east of the start is always a city
-  const grow = !start && !city && ((rx === 0 && rz === 1) || hash2(rx, rz, 507) < 0.1), big = city || grow;      // the region south of the start is always a grow op
-  const lo = city ? 226 : grow ? 165 : 110, span = REG - 2 * lo, id = rx + ',' + rz;
+  const grow = !start && !city && ((rx === 0 && rz === 1) || hash2(rx, rz, 507) < 0.1);      // the region south of the start is always a grow op
+  const track = !start && !city && !grow && ((rx === TR0[0] && rz === TR0[1]) || hash2(rx, rz, 509) < 0.07), big = city || grow || track;
+  const lo = city ? 226 : grow ? 165 : track ? 178 : 110, span = REG - 2 * lo, id = rx + ',' + rz;
   const want = big || start ? null : LM_DEFS[Math.floor(hash2(rx, rz, 504) * LM_DEFS.length)];     // the landmark this region would like, if the ground suits
   let first = null, flatSpot = null;
   for (let i = 0; i < 26; i++) {
     const x = Math.floor(rx * REG + lo + hash2(rx * 53 + i, rz, 511) * span) + .5, z = Math.floor(rz * REG + lo + hash2(rx, rz * 53 + i, 512) * span) + .5;
     const hr = baseHeight(x, z), h = Math.floor(hr), alt = h - SEA;
     if (alt < 2) continue;
-    const rad = city ? 100 : grow ? 70 : want ? want.pad : 10, tol = big ? 16 : want ? want.flat * 1.5 : 5;
+    const rad = city || track ? 100 : grow ? 70 : want ? want.pad : 10, tol = big ? 16 : want ? want.flat * 1.5 : 5;
     let flat = true;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const hh = baseHeight(x + dx * rad, z + dz * rad); if (Math.abs(hh - hr) > tol || (big && hh < SEA)) flat = false; }
     const base = { rx, rz, id, x, z, y: h, pad: 0, blend: 0 };
@@ -659,12 +665,14 @@ function makeSite(rx, rz) {
     if (start) return { ...base, kind: 'start' };
     if (city) return { ...base, kind: 'city', def: CITY_DEF, pad: 150, blend: 70, name: CITY_A[Math.floor(hash2(rx, rz, 521) * CITY_A.length)] + ' ' + CITY_B[Math.floor(hash2(rx, rz, 522) * CITY_B.length)] };
     if (grow) return { ...base, kind: 'grow', def: GROW_DEF, pad: 105, blend: 55 };
+    if (track) return trackSite(base, rx, rz);
     if (want.want(naturalBiome(x, z, h), alt, x, z)) return { ...base, kind: 'landmark', def: want, pad: want.pad, blend: 10 };
   }
   if (start) return { ...(flatSpot || first || { rx, rz, id, x: 256.5, z: 256.5, y: Math.max(SEA + 2, Math.floor(baseHeight(256.5, 256.5))), pad: 0, blend: 0 }), kind: 'start' };
   if (!first) return null;         // open sea
   if (rx === 1 && rz === 0) return { ...(flatSpot || first), kind: 'city', def: CITY_DEF, pad: 150, blend: 70, name: 'Port Larkin' };      // the first city is always there, whatever the ground
   if (rx === 0 && rz === 1) return { ...(flatSpot || first), kind: 'grow', def: GROW_DEF, pad: 105, blend: 55 };
+  if (rx === TR0[0] && rz === TR0[1]) return trackSite(flatSpot || first, rx, rz);
   if (flatSpot && !big) {         // the wanted landmark does not suit this ground: take one that does
     const b = naturalBiome(flatSpot.x, flatSpot.z, flatSpot.y), fits = LM_DEFS.filter(d => d.want(b, flatSpot.y - SEA, flatSpot.x, flatSpot.z));
     if (fits.length && hash2(rx, rz, 505) < 0.75) { const def = fits[Math.floor(hash2(rx, rz, 506) * fits.length)]; return { ...flatSpot, kind: 'landmark', def, pad: def.pad, blend: 10 }; }
@@ -817,6 +825,43 @@ function regionCrates(rx, rz) {     // lost parcels: one at the end of every sid
   return list;
 }
 const spawn = (() => { const st = siteOf(0, 0); return { x: st.x, z: st.z, h: Math.PI / 2 }; })();      // facing east, towards the first city
+
+// The circuit: a wavy loop round the middle of the yard, the same either side of the start so the main straight is straight. Its distance field says
+// how far each block is from the racing line and which point of the lap it is nearest.
+let trkI = 0;
+function trackOf(st) {
+  if (st.trk) return st.trk;
+  const alongX = hash2(st.rx, st.rz, 531) < 0.5, A = 80, B = 48, wob = [];
+  for (let i = 0; i < 7; i++) wob.push(i < 2 ? 0 : (hash2(st.rx + i, st.rz - i, 532) - 0.5) * 0.4);
+  let p = [];
+  for (let i = 0; i < 12; i++) { const a = Math.PI / 2 + i * Math.PI / 6, k = 1 + wob[Math.min(i, 12 - i)]; p.push([Math.cos(a) * A * k, Math.sin(a) * B * k]); }
+  for (let t = 0; t < 4; t++) { const o = []; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; o.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); } p = o; }
+  let loc = [], acc = 0;
+  for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length], L = hyp(b[0] - a[0], b[1] - a[1]); while (acc <= L) { const f = acc / L; loc.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); acc += 1; } acc -= L; }
+  let s0 = 0, su = 1e9;
+  loc.forEach(([u, v], i) => { if (v > 0 && Math.abs(u) < su) { su = Math.abs(u); s0 = i; } });
+  loc = loc.slice(s0).concat(loc.slice(0, s0));
+  const N = loc.length, pts = loc.map(([u, v]) => alongX ? [st.x + u, st.z + v] : [st.x + v, st.z + u]);
+  const tng = pts.map((_, i) => { const a = pts[(i - 1 + N) % N], b = pts[(i + 1) % N], l = hyp(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; });
+  const nrm = tng.map(([x, z]) => [-z, x]), R = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const a = tng[(i - 4 + N) % N], b = tng[(i + 4) % N]; R[i] = Math.min(500, 8 / Math.max(Math.acos(clamp(a[0] * b[0] + a[1] * b[1], -1, 1)), 1e-3)); }
+  const G = 248, ox = Math.floor(st.x) - 124, oz = Math.floor(st.z) - 124, D = new Float32Array(G * G).fill(99), ID = new Int16Array(G * G);
+  pts.forEach(([px, pz], i) => {
+    const gx = Math.floor(px) - ox, gz = Math.floor(pz) - oz;
+    for (let dz = -15; dz <= 15; dz++) for (let dx = -15; dx <= 15; dx++) {
+      const x = gx + dx, z = gz + dz; if (x < 0 || z < 0 || x >= G || z >= G) continue;
+      const d = hyp(ox + x + .5 - px, oz + z + .5 - pz), k = z * G + x;
+      if (d < D[k]) { D[k] = d; ID[k] = i; }
+    }
+  });
+  const sgn = nrm[0][0] * (pts[0][0] - st.x) + nrm[0][1] * (pts[0][1] - st.z) > 0 ? 1 : -1;
+  return st.trk = { pts, nrm, R, N, D, ID, G, ox, oz, alongX, tan0: [Math.round(tng[0][0]), Math.round(tng[0][1])], on: [Math.round(nrm[0][0] * sgn), Math.round(nrm[0][1] * sgn)] };
+}
+function trackD(st, x, z) {      // distance from the racing line; the nearest point of the lap is left in trkI
+  const t = trackOf(st), gx = Math.floor(x) - t.ox, gz = Math.floor(z) - t.oz;
+  if (gx < 0 || gz < 0 || gx >= t.G || gz >= t.G) { trkI = 0; return 99; }
+  const k = gz * t.G + gx; trkI = t.ID[k]; return t.D[k];
+}
 
 // ───────────────────────── GL setup ─────────────────────────
 const canvas = $('gl');
@@ -1097,6 +1142,55 @@ function cityBuilding(mb, obs, st, x, y, z, cx, cz) {      // a block with rows 
   mb.flag = f;
   obs.push({ kind: 'bldg', x: x + W / 2, z: z + W / 2, r: 0, rr: 9, x0: x, z0: z, x1: x + W, z1: z + W, y, top: y + hgt, cx, cz });
 }
+const CROWD = [[.9, .2, .2], [.2, .4, .9], [.95, .85, .2], [.2, .7, .3], [.95, .95, .95], [.92, .5, .15], [.6, .3, .8], [.3, .25, .2], [.98, .6, .75]];
+function trackBits(mb, obs, st, ox, oz, cx, cz) {      // lamps down both sides, the gantry over the line, and the grandstand; each piece belongs to the chunk it stands in
+  const t = trackOf(st), inC = (x, z) => x >= ox && x < ox + CH && z >= oz && z < oz + CH;
+  mb.flag = 8;
+  for (let i = 13; i < t.N - 13; i += 26) for (const sd of [-1, 1]) {
+    const x = Math.floor(t.pts[i][0] + t.nrm[i][0] * sd * 14), z = Math.floor(t.pts[i][1] + t.nrm[i][1] * sd * 14);
+    if (!inC(x, z) || felled.has(x + ',' + z)) continue;
+    const y = top(x, z), D = DECO.lamp; D.build(mb, x, y, z, 0);
+    obs.push({ x: x + D.ox, z: z + D.ox, r: D.r, kind: 'lamp', wx: x, wz: z, y, seed: 0, opt: undefined, cx, cz, bh: 0 });
+  }
+  const [sx, sz] = t.pts[0], [tx, tz] = t.tan0, [nx, nz] = t.on, y = top(Math.floor(sx), Math.floor(sz));
+  const W = (a, b) => [sx + tx * a + nx * b, sz + tz * a + nz * b], here = (a, b) => { const [x, z] = W(a, b); return inC(Math.floor(x), Math.floor(z)); };
+  const tbox = (a0, a1, b0, b1, y0, y1, c, solid, base) => {      // a box laid out along the track (a) and out from it (b)
+    const [x0, z0] = W(a0, b0), [x1, z1] = W(a1, b1), X0 = Math.min(x0, x1), X1 = Math.max(x0, x1), Z0 = Math.min(z0, z1), Z1 = Math.max(z0, z1);
+    if (c) mb.box(X0, y0, Z0, X1, y1, Z1, c);
+    if (solid) obs.push({ kind: 'bldg', x: (X0 + X1) / 2, z: (Z0 + Z1) / 2, r: 0, rr: Math.max(X1 - X0, Z1 - Z0), x0: X0, z0: Z0, x1: X1, z1: Z1, y: y0, base, top: y1, cx, cz });
+  };
+  for (const sd of [-1, 1]) if (here(0, sd * 11.5)) tbox(-.5, .5, sd * 11.5 - .5, sd * 11.5 + .5, y, y + 8.4, [.82, .82, .86], true);      // the gantry's legs
+  for (let k = -1; k <= 1; k++) if (here(0, k * 8)) {
+    tbox(-.5, .5, k * 8 - 4, k * 8 + 4, y + 6.6, y + 8.4, [.18, .18, .2], true, y + 6.6);
+    if (!k) tbox(-.56, .56, -6, 6, y + 7, y + 8, [.95, .95, .95]);
+  }
+  for (let g = -2; g < 2; g++) {      // the grandstand, in four bays
+    const a0 = g * 10, a1 = a0 + 10;
+    if (!here(a0 + 5, 19)) continue;
+    for (let k = 0; k < 5; k++) {
+      tbox(a0, a1, 14 + k * 2, 16 + k * 2, y - 1, y + 1 + k * 1.4, jit([.62, .62, .66], .1, k * .21));
+      for (let j = a0; j < a1; j++) if (hash2(j * 7 + k, g, 991) < 0.8) tbox(j + .2, j + .8, 14.6 + k * 2, 15.4 + k * 2, y + 1 + k * 1.4, y + 1.9 + k * 1.4, CROWD[Math.floor(hash2(j, k * 13 + g, 992) * CROWD.length * 0.999)]);
+    }
+    tbox(a0, a1, 24, 24.6, y - 1, y + 9.6, [.5, .5, .55]);
+    tbox(a0, a0 + .4, 14, 14.4, y, y + 9.6, C.dmetal);
+    tbox(a0, a1, 13.4, 24.6, y + 9.6, y + 10.1, g & 1 ? [.86, .18, .16] : [.95, .95, .95]);
+    tbox(a0, a1, 14, 24.6, y - 1, y + 10.1, null, true);
+  }
+}
+function lighthouse(mb, obs, L, cx, cz) {      // on a rock just off the shore: a striped tower with the lamp room on top
+  const x = Math.floor(L.x) - 2, z = Math.floor(L.z) - 2, y = L.y, base = Math.floor(baseHeight(L.x, L.z)) - 2;
+  mb.flag = 8;
+  mb.box(x - 2, base, z - 2, x + 6, y, z + 6, jit(C.stone, .1, .3)); mb.box(x - 1.2, base, z - 2.8, x + 5, y - .6, z + 6.6, jit(C.dstone, .1, .6)); mb.box(x - 2.8, base, z - 1, x + 6.7, y - .9, z + 5, jit(C.stone, .15, .8));
+  for (let k = 0; k < 6; k++) { const q = k * 0.12; mb.box(x + q, y + k * 3, z + q, x + 4 - q, y + k * 3 + 3, z + 4 - q, GLAM ? PINKS[k % 4] : k % 2 ? [.93, .93, .9] : [.82, .16, .14]); }
+  const t = y + 18;
+  mb.box(x - .7, t, z - .7, x + 4.7, t + .4, z + 4.7, C.dmetal);
+  mb.box(x - .7, t + .4, z - .7, x + 4.7, t + 1.1, z - .6, C.dmetal); mb.box(x - .7, t + .4, z + 4.6, x + 4.7, t + 1.1, z + 4.7, C.dmetal);
+  mb.box(x - .7, t + .4, z - .7, x - .6, t + 1.1, z + 4.7, C.dmetal); mb.box(x + 4.6, t + .4, z - .7, x + 4.7, t + 1.1, z + 4.7, C.dmetal);
+  mb.flag = 24; mb.box(x + .6, t + .4, z + .6, x + 3.4, t + 3, z + 3.4, [1, .92, .6]); mb.flag = 8;
+  mb.box(x + .3, t + 3, z + .3, x + 3.7, t + 3.5, z + 3.7, [.82, .16, .14]); mb.box(x + 1, t + 3.5, z + 1, x + 3, t + 4.4, z + 3, [.82, .16, .14]); mb.box(x + 1.8, t + 4.4, z + 1.8, x + 2.2, t + 5.2, z + 2.2, C.dmetal);
+  mb.box(x + 1.5, y, z - .06, x + 2.5, y + 2, z, [.3, .2, .14]);
+  obs.push({ kind: 'bldg', x: x + 2, z: z + 2, r: 0, rr: 6, x0: x - 2, z0: z - 2, x1: x + 6, z1: z + 6, y: base, top: t + 5.2, cx, cz });
+}
 function buildChunk(cx, cz) {
   const ox = cx * CH, oz = cz * CH, W = CH + 2, hm = new Int16Array(W * W);
   for (let z = -1; z <= CH; z++) for (let x = -1; x <= CH; x++) hm[(z + 1) * W + x + 1] = top(ox + x, oz + z);
@@ -1118,7 +1212,12 @@ function buildChunk(cx, cz) {
     massif(wx + .5, wz + .5);
     const onTrail = mtTrail && h > SEA + 8;
     if (onTrail && rdv >= RW) tc = mix3(tc, b === SNOW ? [.62, .6, .6] : [.5, .42, .33], 0.6);      // the worn track up a mountain gully
-    let cc = null, gc = null;
+    let cc = null, gc = null, tk = -1;
+    if (b === TRACK) {      // tarmac, red and white kerbs, a gravel strip, and mown stripes on the grass; a chequered line at the start
+      tk = trackD(st, wx + .5, wz + .5);
+      tc = tk < 7.5 ? (trkI < 2 ? (((wx + wz) & 1) ? [.95, .95, .95] : [.1, .1, .11]) : [.25, .25, .27]) : tk < 8.8 ? (((trkI >> 1) & 1) ? [.86, .14, .12] : [.95, .95, .95]) : tk < 10.6 ? [.66, .6, .5]
+        : (((trackOf(st).alongX ? wx : wz) >> 3) & 1) ? [.36, .63, .26] : [.43, .7, .31];
+    }
     if (b === GROW) { gc = growCell(st, wx, wz); tc = GROWC[gc.t]; }
     if (b === CITY) {      // city ground: asphalt with lane dashes, pavement, lots, parks
       cc = cityCell(st, wx, wz);
@@ -1164,6 +1263,7 @@ function buildChunk(cx, cz) {
       else if (gc.t === 1 && gc.sx === 0 && gc.sz === 2 && hash2(wx, wz, 741) < 0.5) gput('lamp', 0);
       continue;
     }
+    if (tk >= 0) continue;      // what stands round the track is added once the ground is down
     if (cc) {      // city scenery: a building on each lot, trees in the parks, lamps along the pavements
       mb.flag = 8;
       const cput = (kind, seed, opt) => { if (felled.has(wx + ',' + wz)) return; const D = DECO[kind]; D.build(mb, wx, h, wz, seed, opt); obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt, cx, cz, bh: 0 }); };
@@ -1245,6 +1345,10 @@ function buildChunk(cx, cz) {
   }
   GLAM = false; mb.flag = 8;
   for (let gz = Math.floor((oz - 44) / AG); gz <= Math.floor((oz + CH + 44) / AG); gz++) for (let gx = Math.floor((ox - 44) / AG); gx <= Math.floor((ox + CH + 44) / AG); gx++) { const a = archAt(gx, gz); if (a) archPart(mb, obs, a, ox, oz, cx, cz); }
+  if (st && st.kind === 'track') trackBits(mb, obs, st, ox, oz, cx, cz);
+  for (const L of lighthousesOf(ox >> RSH, oz >> RSH)) if (Math.floor(L.x) >= ox && Math.floor(L.x) < ox + CH && Math.floor(L.z) >= oz && Math.floor(L.z) < oz + CH) {
+    if (roadDist(L.x, L.z) < RW + 6) L.off = true; else lighthouse(mb, obs, L, cx, cz);
+  }
   return { cx, cz, mesh: makeMesh(mb), water: makeMesh(wb), obs };
 }
 const chunks = new Map(); let queue = [], lastCC = '';
@@ -1374,7 +1478,7 @@ let skyAct = newSky();      // what is in the sky around the truck
 // and where it is on it depends only on the clock, so both players see it in the same place; what each animal does is each player's own.
 const herdCache = new Map(), boatCache = new Map(), animals = [];
 let boatsAct = [], herdT = 0;
-const HERD_BIOME = [['sheep', 'deer', 'sheep'], ['deer'], ['camel'], ['penguin'], null, ['goat'], null, null, null, ['goat', 'camel'], ['cow', 'cow', 'goat']];
+const HERD_BIOME = [['sheep', 'deer', 'sheep'], ['deer'], ['camel'], ['penguin'], null, ['goat'], null, null, null, ['goat', 'camel'], ['cow', 'cow', 'goat'], null];
 function herdsOf(rx, rz) {
   const k = rkey(rx, rz);
   let hs = herdCache.get(k);
@@ -1389,24 +1493,61 @@ function herdsOf(rx, rz) {
   herdCache.set(k, hs);
   return hs;
 }
+const VESSEL = [      // speed; how far the hull reaches fore, aft and to each side; how high it stands; the water it needs; the smallest circuit; how big it is drawn
+  { spd: 4.5, fore: 5.8, aft: 5, hw: 3.3, ht: 6, depth: 1.7, rmin: 16, sc: 1.8 },      // fishing boat
+  { spd: 3.6, fore: 5.8, aft: 5, hw: 3.3, ht: 13.5, depth: 1.7, rmin: 16, sc: 1.8 },      // sailing boat
+  { spd: 12, fore: 5.8, aft: 5, hw: 3.3, ht: 2.6, depth: 1.7, rmin: 16, sc: 1.8 },      // speedboat
+  { spd: 3.4, fore: 13, aft: 11, hw: 4.8, ht: 22, depth: 2.6, rmin: 34, sc: 1.8 },      // pirate ship
+  { spd: 5, fore: 10, aft: 11, hw: 2.6, ht: 4, depth: 4.5, rmin: 26, sc: 1.6 },      // submarine
+  { spd: 3, fore: 9, aft: 13, hw: 3.6, ht: 2.5, depth: 4.5, rmin: 26, sc: 1.5 },      // whale
+  { spd: 7, fore: 3.4, aft: 4, hw: 1.5, ht: 2.2, depth: 3, rmin: 12, sc: 1.6 },      // shark
+], VWEIGHT = [3, 3, 2, 3.6, 2.4, 2.8, 1.2];
+// Lighthouses stand on rocks in the shallows off a headland, where there is land on one side and open water on the other.
+const lightCache = new Map();
+let lightsAct = [];
+function lighthousesOf(rx, rz) {
+  const k = rkey(rx, rz);
+  let ls = lightCache.get(k);
+  if (ls) return ls;
+  ls = [];
+  if (hash2(rx, rz, 971) < 0.8) {
+    const st = siteOf(rx, rz);
+    for (let i = 0; i < 90; i++) {
+      const x = Math.floor(rx * REG + 24 + hash2(rx * 7 + i, rz, 972) * (REG - 48)) + .5, z = Math.floor(rz * REG + 24 + hash2(rx, rz * 7 + i, 973) * (REG - 48)) + .5, b = baseHeight(x, z);
+      if (b > SEA - 0.5 || b < SEA - 4 || (st && st.pad && hyp(x - st.x, z - st.z) < st.pad + st.blend + 20)) continue;
+      let land = 0, sea = 0;
+      for (const [dx, dz] of COAST8) { if (baseHeight(x + dx * 20, z + dz * 20) > SEA + 1) land++; if (baseHeight(x + dx * 44, z + dz * 44) < SEA - 2) sea++; }
+      if (land < 1 || sea < 3) continue;
+      ls.push({ x, z, y: SEA + 2, off: false });
+      break;
+    }
+  }
+  lightCache.set(k, ls);
+  return ls;
+}
 function boatsOf(rx, rz) {
   const k = rkey(rx, rz);
   let bs = boatCache.get(k);
   if (bs) return bs;
   bs = [];
-  for (let i = 0; i < 60 && bs.length < 3; i++) {
-    const rad = 16 + hash2(rx * 3 + i, rz, 963) * 50, room = REG - 2 * rad - 28;
+  const lights = lighthousesOf(rx, rz);
+  for (let i = 0; i < 70 && bs.length < 4; i++) {
+    const rad = 12 + hash2(rx * 3 + i, rz, 963) * 58, room = REG - 2 * rad - 28;
     const cx = rx * REG + rad + 14 + hash2(rx * 19 + i, rz, 961) * room, cz = rz * REG + rad + 14 + hash2(rx, rz * 19 + i, 962) * room;
-    let ok = true;
+    let ok = true, hmax = -99;
     for (let j = 0; j < 16 && ok; j++) {      // deep water all the way round, with room either side
-      const a = j * 0.3927, c = Math.cos(a), sn = Math.sin(a);
-      if (baseHeight(cx + c * rad, cz + sn * rad) > SEA - 1.7 || baseHeight(cx + c * (rad + 5), cz + sn * (rad + 5)) > SEA - 1.2 || baseHeight(cx + c * (rad - 5), cz + sn * (rad - 5)) > SEA - 1.2) ok = false;
+      const a = j * 0.3927, c = Math.cos(a), sn = Math.sin(a), hb = baseHeight(cx + c * rad, cz + sn * rad);
+      if (hb > hmax) hmax = hb;
+      if (hb > SEA - 1.7 || baseHeight(cx + c * (rad + 5), cz + sn * (rad + 5)) > SEA - 1.2 || baseHeight(cx + c * (rad - 5), cz + sn * (rad - 5)) > SEA - 1.2) ok = false;
     }
     for (let j = 0; j < 32 && ok; j++) { const a = j * 0.19635; if (heightF(cx + Math.cos(a) * rad, cz + Math.sin(a) * rad) > SEA - 1.2) ok = false; }      // and no causeway across the course
     for (const o of bs) if (hyp(o.cx - cx, o.cz - cz) < o.rad + rad + 8) ok = false;
+    for (const L of lights) if (Math.abs(hyp(L.x - cx, L.z - cz) - rad) < 14) ok = false;
     if (!ok) continue;
-    const v = Math.floor(hash2(rx + i, rz + i, 964) * 2.999);
-    bs.push({ cx, cz, rad, y: WATER, ph: hash2(rx, rz + i, 965) * 6.2832, dir: hash2(rx - i, rz, 966) < 0.5 ? 1 : -1, v, w: [4.5, 3.6, 12][v] / rad, glam: false, wake: 0, hornT: 0 });
+    const fit = VESSEL.map((V, j) => rad >= V.rmin && SEA - hmax >= V.depth ? VWEIGHT[j] : 0), tot = fit.reduce((a, b) => a + b, 0);
+    let pick = hash2(rx + i, rz + i, 964) * tot, v = 0;
+    while (v < fit.length - 1 && pick >= fit[v]) { pick -= fit[v]; v++; }
+    bs.push({ cx, cz, rad, y: WATER, ph: hash2(rx, rz + i, 965) * 6.2832, dir: hash2(rx - i, rz, 966) < 0.5 ? 1 : -1, v, w: VESSEL[v].spd / rad, glam: false, wake: 0, hornT: 0, gunT: 3, yarr: false, spoutT: 2 });
   }
   boatCache.set(k, bs);
   return bs;
@@ -1479,7 +1620,7 @@ function paintMapTile(t) {      // the picture of one region: terrain, streets, 
     let c;
     if (h < SEA) { const dp = clamp((SEA - h) / 7, 0, 1); c = [lerp(.38, .1, dp), lerp(.72, .3, dp), lerp(.84, .6, dp)]; }
     else {
-      const b = biomeAt(wx, wz, h), sh = clamp(0.92 + (hs[i] - (px && py ? hs[i - MTN - 1] : heightF(wx - MPX, wz - MPX))) * 0.09, 0.62, 1.25), bc = b === CITY ? (onStreet(wx, wz) ? [.2, .2, .23] : [.56, .55, .56]) : TOPC[b];
+      const b = biomeAt(wx, wz, h), sh = clamp(0.92 + (hs[i] - (px && py ? hs[i - MTN - 1] : heightF(wx - MPX, wz - MPX))) * 0.09, 0.62, 1.25), bc = b === CITY ? (onStreet(wx, wz) ? [.2, .2, .23] : [.56, .55, .56]) : b === TRACK && onTrack(wx, wz) ? [.3, .3, .33] : TOPC[b];
       c = [bc[0] * sh, bc[1] * sh, bc[2] * sh];
     }
     d[i * 4] = clamp(c[0], 0, 1) * 255; d[i * 4 + 1] = clamp(c[1], 0, 1) * 255; d[i * 4 + 2] = clamp(c[2], 0, 1) * 255; d[i * 4 + 3] = 255;
@@ -1555,6 +1696,9 @@ function refreshActive(force) {      // work out which sites and parcels are nea
     for (const kind in skyAct) for (const o of sk[kind]) skyAct[kind].push(o);
   }
   for (const p of skyAct.islands) p.got = gotCrystals.has(p.id);
+  lightsAct = [];
+  for (let cz = Math.floor(car.z - 620) >> RSH; cz <= Math.floor(car.z + 620) >> RSH; cz++) for (let cx = Math.floor(car.x - 620) >> RSH; cx <= Math.floor(car.x + 620) >> RSH; cx++)
+    for (const L of lighthousesOf(cx, cz)) lightsAct.push(L);
   boatsAct = [];
   for (let cz = Math.floor(car.z - 330) >> RSH; cz <= Math.floor(car.z + 330) >> RSH; cz++) for (let cx = Math.floor(car.x - 330) >> RSH; cx <= Math.floor(car.x + 330) >> RSH; cx++)
     for (const o of boatsOf(cx, cz)) boatsAct.push(o);
@@ -1604,7 +1748,9 @@ function audioInit() {
     const o = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
     o.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 300; g.gain.value = 0;
     o.connect(f); o2.connect(f); f.connect(g); g.connect(AC.destination); o.start(); o2.start();
-    eng = { o, o2, f, g };
+    const ro = AC.createOscillator(), rf = AC.createBiquadFilter(), rg = AC.createGain();
+    ro.type = 'sawtooth'; rf.type = 'lowpass'; rf.frequency.value = 1100; rg.gain.value = 0; ro.connect(rf); rf.connect(rg); rg.connect(AC.destination); ro.start();
+    eng = { o, o2, f, g, ro, rg };
   } catch (e) { AC = null; }
 }
 function tone(freq, t0, dur, type = 'triangle', vol = 0.1) {
@@ -1667,7 +1813,7 @@ function targetPool() {      // the places a waypoint can be. In a room both pla
   return { pool, ox, oz };
 }
 function pickTarget() {
-  if (race) { target = null; return; }
+  if (race || trackRace || roadRace) { target = null; return; }
   if (pinned && !pinned.found) { target = pinned; return; }
   pinned = null; let best = null, bd = 1e9;
   const { pool, ox, oz } = targetPool();
@@ -1684,7 +1830,7 @@ function cycleTarget() {
   toast('WAYPOINT', whereText(pinned), pinned.def.hint, 3.5);
 }
 function updateHud() {
-  el.found.textContent = foundSites.size; el.kinds.textContent = new Set(foundSites.values()).size; el.crates.textContent = gotCrates.size;
+  el.found.textContent = foundSites.size; el.kinds.textContent = new Set(foundSites.values()).size; $('sKindsN').textContent = KINDS.length; el.crates.textContent = gotCrates.size;
   el.expl.textContent = (explCells * EC * EC / 1e6).toFixed(2); el.km.textContent = (odo / 1000).toFixed(1); el.smash.textContent = smashed;
   let st = '', sc = '';
   if (opts.hunters && !race) {
@@ -1700,7 +1846,19 @@ function updateHud() {
   el.sky.textContent = skyStats.rings + gotCrystals.size + skyStats.balloons || car.fly ? `Sky: ${skyStats.rings} rings · ${gotCrystals.size} crystals · ${skyStats.balloons} balloons` : '';
   el.friend.textContent = ROOM ? (remote.alive ? 'Friend: ' + whereText(remote) : NET.status) : '';
   el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.fly ? 'Gliding · ' + Math.max(0, Math.round(car.air)) + ' m up' : car.road && car.biome !== CITY ? 'Road' : car.trail ? 'Mountain trail' : BIOME_NAME[car.biome];
-  if (race) {
+  if (trackRace) {
+    const tr = trackRace, t = trackOf(tr.st), N = t.N, p = t.pts[(tr.i + 22) % N], dx = p[0] - car.x, dz = p[1] - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
+    el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
+    const mine = trackProg(tr.i, tr.lap, tr.half, N), pos = 1 + racers.filter(r => r.fin || trackProg(r.i, r.lap, r.half, N) > mine).length;
+    el.tn.textContent = tr.cd > 0 ? 'Watch the lights…' : tr.done ? `Finished P${tr.place} of ${racers.length + 1}` : `Lap ${Math.min(tr.lap + 1, tr.laps)}/${tr.laps} · P${pos} of ${racers.length + 1}`;
+    el.ts.textContent = tr.done ? (tr.place === 1 ? 'You won.' : tr.winner + ' won.') + ' Best lap ' + tr.best.toFixed(1) + ' s' : `Lap ${tr.lapT.toFixed(1)} s` + (tr.best ? ` · best ${tr.best.toFixed(1)} s` : '') + ' · 3 to retire';
+  } else if (roadRace) {
+    const rr = roadRace, pk = rr.pack, p = pkPt(pk, rr.i + 14), dx = p[0] - car.x, dz = p[1] - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
+    el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
+    const pos = 1 + pk.cars.filter(c => c.fin || c.a > rr.i).length;
+    el.tn.textContent = rr.done ? `Finished P${rr.place} of ${pk.cars.length + 1}` : `Street race · P${pos} of ${pk.cars.length + 1}`;
+    el.ts.textContent = rr.done ? (rr.place === 1 ? 'You won.' : rr.winner + ' won.') : `${Math.max(0, Math.round((rr.goal - rr.i) * 2))} m to the finish · ${pk.name} · 3 to drop out`;
+  } else if (race) {
     const cp = race.cp, dx = cp.x - car.x, dz = cp.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
     el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
     el.tn.textContent = `Race · You ${race.you} – ${race.bot} ${race.mp ? 'Friend' : 'Thief'}`;
@@ -1711,6 +1869,11 @@ function updateHud() {
     el.tn.textContent = 'Waypoint: ' + compass(dx, dz);
     el.ts.textContent = Math.round(Math.hypot(dx, dz)) + ' m · ' + target.def.hint;
   } else { el.arrow.style.opacity = .2; el.tn.textContent = 'Nothing new in range'; el.ts.textContent = 'Keep travelling: there is always more out there.'; }
+  if (!trackRace && !race && !roadRace) {
+    const tk = nearTrack(), pk = nearPack();
+    if (pk) { el.tn.textContent = pk.name + ' are racing by'; el.ts.textContent = 'Press 3 to race them to a finish line about 900 m down the road.'; }
+    else if (tk) { el.tn.textContent = tk.name; el.ts.textContent = 'Press 3 to line up on the grid for five laps.'; }
+  }
 }
 const mini = $('mini'), mctx = mini.getContext('2d');
 function drawMarkers(ctx, toPx, big) {
@@ -1723,6 +1886,11 @@ function drawMarkers(ctx, toPx, big) {
     const [px, py] = toPx(n.x, n.z);
     ctx.fillStyle = n.type === 'thief' ? '#ffd838' : n.type === 'rival' ? '#ff5ad9' : '#ff3b2e'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(px, py, 3.5, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  if (roadRace) { const g = pkPt(roadRace.pack, roadRace.goal), [px, py] = toPx(g[0], g[1]), w = ctx.canvas.width; ctx.strokeStyle = '#27e08a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(clamp(px, 10, w - 10), clamp(py, 10, w - 10), 7, 0, 7); ctx.stroke(); }
+  for (const r of allRacers()) {
+    const [px, py] = toPx(r.x, r.z);
+    ctx.fillStyle = `rgb(${r.def.col.map(v => v * 255 | 0).join(',')})`; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(px, py, 3, 0, 7); ctx.fill(); ctx.stroke();
   }
   if (remote.alive) {      // your friend: a blue dot, pinned to the edge of the map when out of view
     const [px, py] = toPx(remote.x, remote.z), w = ctx.canvas.width;
@@ -1799,7 +1967,11 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyH') { tone(392, 0, 0.35, 'square', 0.07); tone(494, 0, 0.35, 'square', 0.07); }
   else if (e.code === 'Digit1') { setOpt('thieves', !opts.thieves); toast('PARCEL THIEVES', opts.thieves ? 'On the loose' : 'Off', opts.thieves ? 'Yellow buggies. Run them down to get the parcel back.' : '', 2.5); }
   else if (e.code === 'Digit2') { setOpt('hunters', !opts.hunters); toast('HUNTER TRUCKS', opts.hunters ? 'Coming for you' : 'Off', opts.hunters ? 'Outrun them, or hit them harder than they hit you.' : '', 2.5); }
-  else if (e.code === 'Digit3') { if (race) endRace(); else startRace(); }
+  else if (e.code === 'Digit3') {
+    if (trackRace) endTrackRace(!trackRace.done);
+    else if (roadRace) endRoadRace(!roadRace.done);
+    else { const pk = nearPack(), tk = nearTrack(); if (pk && state === 'play') joinRoadRace(pk); else if (tk && state === 'play') startTrackRace(tk); else if (race) endRace(); else startRace(); }
+  }
   else if (e.code === 'KeyV') { muted = !muted; toast('SOUND', muted ? 'Muted' : 'On', '', 1.5); }
 });
 addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
@@ -1820,9 +1992,9 @@ if (save && (save.found || []).length + (save.crates || []).length > 0) {
 }
 
 // ───────────────────────── physics ─────────────────────────
-const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8, 5.6, 5];
-const MU = [.8, .76, .64, .6, .62, .92, .5, 1.1, .8, .88, .82];      // how steep a slope the tyres can still drive up, by ground      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
-const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3], [.8, .5, .32], [.45, .4, .26]];
+const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8, 5.6, 5, 5];
+const MU = [.8, .76, .64, .6, .62, .92, .5, 1.1, .8, .88, .82, .8];      // how steep a slope the tyres can still drive up, by ground      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
+const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3], [.8, .5, .32], [.45, .4, .26], [.5, .4, .28]];
 function puff(x, y, z, col, size, up, em = 0.1) {
   if (parts.length > 260) parts.shift();
   parts.push({ x, y, z, vx: (Math.random() - .5) * 2, vy: up + Math.random() * 1.5, vz: (Math.random() - .5) * 2, life: 0.7 + Math.random() * 0.4, t: 0, size, col, em });
@@ -2071,6 +2243,7 @@ function senseWorld() {      // what the truck uncovers and picks up, however it
     const fresh = ![...foundSites.values()].includes(l.def.id);
     l.found = true; foundSites.set(l.id, l.def.id); sfxFound(); doSave(); netSend({ t: 'fd', id: l.id, k: l.def.id });
     if (l.kind === 'city') toast('CITY REACHED', l.name, l.def.lore, 6.5);
+    else if (l.kind === 'track') toast(fresh ? 'NEW KIND OF PLACE' : 'RACETRACK', l.name, 'Drivers out on track, good, bad and drunk. Press 3 to line up on the grid for five laps.', 7);
     else toast(fresh ? 'NEW KIND OF PLACE' : 'LANDMARK FOUND', l.def.name, l.def.lore, 6.5);
     checkWin();
   }
@@ -2083,6 +2256,7 @@ function senseWorld() {      // what the truck uncovers and picks up, however it
 // Wings. B unfolds them; the truck becomes a glider that trades height for speed and back again.
 function toggleFly() {
   if (state !== 'play') return;
+  if (!car.fly && (trackRace || roadRace)) { popText('NO WINGS IN A RACE'); return; }
   if (car.fly) { car.fly = false; popText('WINGS IN'); tone(520, 0, 0.12, 'sine', 0.06); tone(340, 0.08, 0.18, 'sine', 0.06); return; }
   const sp = Math.hypot(car.vx, car.vz);
   car.fly = true; car.fb = 0; car.flip = 0; car.yawAcc = 0; car.pop = 0; airT = 0;
@@ -2159,6 +2333,7 @@ function rocketBlast(r) {      // a proper bang: it flattens what is standing th
   if (parts.length > 260) parts.splice(0, parts.length - 260);
   tone(55, 0, 0.6, 'sawtooth', 0.14 * vol); tone(82, 0, 0.35, 'square', 0.09 * vol);
   shake = Math.max(shake, clamp(1 - d / 70, 0, 1) * 0.9);
+  for (const q of allRacers()) if (hyp(q.x - r.x, q.z - r.z) < 12) q.spinT = 1.6;
   for (const a of animals) { const ax = a.x - r.x, az = a.z - r.z, ad = hyp(ax, az) || 1; if (ad < 10 && a.down <= 0) bowl(a, ax / ad * 14, az / ad * 14, 30, false); }
   const ccx = Math.floor(r.x / CH), ccz = Math.floor(r.z / CH);
   for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
@@ -2271,7 +2446,9 @@ const OPT_KEY = 'voxel-driver-opts';
 const opts = { thieves: true, hunters: true };
 try { Object.assign(opts, JSON.parse(localStorage.getItem(OPT_KEY) || '{}')); } catch (e) {}
 const npcs = [];
-let race = null;     // { you, bot, rival, cp, hold } while racing the thief
+let race = null;
+let racers = [], trackAct = null, trackRace = null, trackT = 0, roadRace = null, packT = 2;
+const packs = [];      // groups of street racers out on the roads      // the drivers at the nearest racetrack, that track, and a race against them if one is on     // { you, bot, rival, cp, hold } while racing the thief
 const TWHEELS = [[.92, 1.05], [-.92, 1.05], [.92, -1.1], [-.92, -1.1]];
 const npcMesh = (() => {
   const t = new MB(); t.lo = .9;
@@ -2340,7 +2517,7 @@ function npcEvent(e, m) {      // something a thief or hunter did to this player
 }
 const tell = (P, e, m) => { if (P === car) npcEvent(e, m || {}); else netSend({ t: 'ev', e, ...(m || {}) }); };      // let the right player know
 function syncNpcs() {   // make the roster match the options
-  if (race || guestMode()) return;
+  if (race || trackRace || roadRace || guestMode()) return;
   for (const [type, on, count] of [['thief', opts.thieves, 4], ['hunter', opts.hunters, 3]]) {
     const have = npcs.filter(n => n.type === type);
     if (!on) { for (const n of have) npcs.splice(npcs.indexOf(n), 1); continue; }
@@ -2544,6 +2721,74 @@ const boatMesh = (() => {      // bow towards +Z, origin on the waterline
   sp.box(-.6, .5, -.6, -.1, .95, -.1, dark); sp.box(.1, .5, -.6, .6, .95, -.1, dark); sp.box(-.25, -.2, -3.05, .25, .95, -2.6, dark);
   return [makeMesh(f), makeMesh(sl), makeMesh(sp)];
 })();
+const vesselMesh = [...boatMesh, ...(() => {
+  const hull = [.36, .22, .13], dark = [.22, .14, .08], gold = [.85, .68, .25], sail = [.93, .9, .8], blk = [.08, .08, .09], bone = [.95, .95, .92];
+  const p = new MB(); p.lo = .88;      // a pirate ship
+  p.box(-2.4, -1, -6, 2.4, 1.4, 5, hull); p.box(-1.7, -1, 5, 1.7, 1.6, 6.6, hull); p.box(-.9, -.6, 6.6, .9, 1.8, 7.4, hull); p.box(-.12, 1.6, 7.4, .12, 1.9, 10, dark);
+  p.box(-2.3, 1.4, -6, 2.3, 1.5, 5, [.56, .4, .25]); p.box(-2.5, 1.4, -6.1, -2.3, 2, 5.1, gold); p.box(2.3, 1.4, -6.1, 2.5, 2, 5.1, gold); p.box(-2.4, 1.4, -6, 2.4, 3.6, -3.4, dark); p.box(-2.5, 3.6, -6.1, 2.5, 3.8, -3.3, gold);
+  p.flag = 16; p.box(-1.6, 2.2, -6.05, -.8, 2.9, -6, [1, .85, .45]); p.box(.8, 2.2, -6.05, 1.6, 2.9, -6, [1, .85, .45]); p.flag = 0;
+  for (let k = 0; k < 5; k++) { const z = -2.6 + k * 1.6; p.box(-2.42, .5, z, -2.4, 1, z + .6, blk); p.box(2.4, .5, z, 2.42, 1, z + .6, blk); p.box(-2.8, .65, z + .2, -2.42, .85, z + .4, blk); p.box(2.42, .65, z + .2, 2.8, .85, z + .4, blk); }
+  p.box(-.15, 1.4, 1.6, .15, 12, 1.9, dark); p.box(-.15, 1.4, -2.2, .15, 10.5, -1.9, dark);
+  p.box(-2.8, 4, 1.95, 2.8, 7.5, 2.2, sail); p.box(-2.2, 8, 1.95, 2.2, 10.6, 2.2, sail); p.box(-3, 7.5, 1.9, 3, 7.7, 2.15, dark); p.box(-2.4, 10.6, 1.9, 2.4, 10.8, 2.15, dark);
+  p.box(-2.4, 4, -1.85, 2.4, 7, -1.6, sail); p.box(-1.8, 7.4, -1.85, 1.8, 9.6, -1.6, sail); p.box(-.6, 9.4, 1.15, .6, 9.8, 2.35, dark);
+  p.box(-.04, 10.6, .2, .04, 11.9, 1.6, blk); p.box(-.06, 11.1, .7, .06, 11.5, 1.1, bone); p.box(-.06, 10.85, .45, .06, 10.95, 1.35, bone);
+  const s = new MB(); s.lo = .88; const sh = [.2, .23, .28], st = [.9, .45, .12], per = [.35, .36, .4];      // a submarine
+  s.box(-1.1, -1.1, -5.6, 1.1, .4, 5, sh); s.box(-.75, -.8, 5, .75, .2, 6.2, sh); s.box(-.6, -.7, -6.6, .6, .1, -5.6, sh); s.box(-1.12, -.25, -5.6, 1.12, -.05, 5, st);
+  s.box(-.6, .4, -.8, .6, 2.2, 1.6, sh); s.box(-1.5, 1.4, .3, 1.5, 1.6, 1, sh); s.box(-.1, 2.2, .6, .1, 4.4, .8, per); s.box(-.1, 4.2, .6, .1, 4.4, 1.1, per);
+  s.box(-.08, -.6, -7.2, .08, .9, -6.4, sh); s.box(-1.4, -.4, -7, 1.4, -.25, -6.4, sh);
+  s.flag = 16; s.box(-.12, 2.2, 1.55, .12, 2.4, 1.62, [1, .3, .2]); s.flag = 0;
+  const w = new MB(); w.lo = .88; const wb = [.28, .34, .45], wbel = [.82, .84, .86];      // a whale
+  w.box(-1.6, -1.4, -3, 1.6, 1, 4.5, wb); w.box(-1.3, -1.3, 4.5, 1.3, .7, 6.2, wb); w.box(-1.4, -1.45, -1, 1.4, -1, 6, wbel);
+  w.box(-1.1, -1, -6, 1.1, .6, -3, wb); w.box(-.6, -.6, -8, .6, .3, -6, wb); w.box(-2.6, -.3, -9.2, 2.6, 0, -7.8, wb);
+  w.box(-2.8, -.9, 2.2, -1.6, -.6, 3.6, wb); w.box(1.6, -.9, 2.2, 2.8, -.6, 3.6, wb); w.box(-1.62, -.2, 4.8, -1.6, .1, 5.1, blk); w.box(1.6, -.2, 4.8, 1.62, .1, 5.1, blk); w.box(-.25, 1, 3.6, .25, 1.05, 4, [.18, .22, .3]);
+  const k = new MB(); k.lo = .88; const kg = [.45, .5, .56];      // a shark
+  k.box(-.45, -.5, -1.6, .45, .25, 1.4, kg); k.box(-.3, -.4, 1.4, .3, .1, 2.1, kg); k.box(-.36, -.52, -1.2, .36, -.35, 1.6, [.88, .88, .9]);
+  k.box(-.07, .25, -.4, .07, 1.25, .4, kg); k.box(-.07, .25, -.7, .07, .9, -.4, kg); k.box(-.06, -.5, -2.6, .06, .6, -2.1, kg); k.box(-.2, -.3, -2.1, .2, 0, -1.6, kg);
+  k.box(-1.1, -.35, .3, -.45, -.25, .9, kg); k.box(.45, -.35, .3, 1.1, -.25, .9, kg);
+  return [makeMesh(p), makeMesh(s), makeMesh(w), makeMesh(k)];
+})()];
+function vesselPose(o, now) {      // where it is, which way it faces, its height, pitch and roll, and how far under it has gone (0 afloat, 1 deep)
+  const [x, , z, yaw] = orbitPos(o, now, o.w);
+  let y = WATER + 0.1 + Math.sin(now * 1.7 + o.ph) * 0.12, sub = 0, pitch = Math.sin(now * 1.1 + o.ph) * 0.04, roll = Math.sin(now * 1.3 + o.ph) * 0.06;
+  if (o.v === 2) { roll -= 0.14 * o.dir; pitch -= 0.1; }
+  else if (o.v === 3) roll *= 1.5;
+  else if (o.v === 4 || o.v === 5) {      // they surface for a while, then go down again
+    const a = now * (o.v === 4 ? 0.06 : 0.05) + o.ph, sn = Math.sin(a);
+    sub = smooth(-0.15, 0.35, sn); y = WATER + (o.v === 4 ? 0.1 : -0.4) - sub * 6; pitch = -0.35 * Math.cos(a) * sub * (1 - sub) * 4; roll = 0;
+  } else if (o.v === 6) { y = WATER - 0.9; pitch = 0; roll = 0; }
+  return [x, y, z, yaw, pitch, roll, sub];
+}
+const balls = [];
+function pirateGuns(o, bx, bz, yaw, d, dt) {      // a broadside at the truck, now and then, while it is in range
+  if (state !== 'play' || d > 120 || car.y > WATER + 50) { o.gunT = Math.max(o.gunT, 1.5); return; }
+  if (!o.yarr) { o.yarr = true; popText('YARR!'); [196, 247, 294, 247].forEach((f, i) => tone(f, i * 0.15, 0.25, 'square', 0.05)); }
+  o.gunT -= dt;
+  if (o.gunT > 0) return;
+  o.gunT = 4 + Math.random() * 3;
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), side = (car.x - bx) * fz - (car.z - bz) * fx > 0 ? 1 : -1, al = (Math.random() - .5) * 12;
+  const mx = bx + fx * al + fz * side * 4.8, mz = bz + fz * al - fx * side * 4.8, my = WATER + 2.6;
+  const T = hyp(car.x - mx, car.z - mz) / 32 + 0.4, tx = car.x + car.vx * T * 0.85, tz = car.z + car.vz * T * 0.85, ty = car.fly ? car.y + 1 : Math.max(groundAt(tx, tz), WATER) + 0.8;
+  balls.push({ x: mx, y: my, z: mz, vx: (tx - mx) / T, vy: (ty - my + 10 * T * T) / T, vz: (tz - mz) / T, t: 0 });
+  for (let k = 0; k < 10; k++) puff(mx + (Math.random() - .5) * 1.5, my + (Math.random() - .5), mz + (Math.random() - .5) * 1.5, k % 2 ? [.85, .85, .85] : [1, .7, .3], 0.5, 1.5, k % 2 ? 0.1 : 0.8);
+  const vol = clamp(1 - d / 160, 0.15, 1); tone(60, 0, 0.4, 'sawtooth', 0.12 * vol); tone(95, 0, 0.2, 'square', 0.08 * vol);
+}
+function updateBalls(dt) {
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i]; b.t += dt; b.vy -= 20 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+    const g = Math.max(groundAt(b.x, b.z), WATER), dc = hyp(b.x - car.x, b.z - car.z), direct = dc < 2.6 && Math.abs(b.y - (car.y + 1.2)) < 2;
+    if (!direct && b.y > g && b.t < 8) continue;
+    balls.splice(i, 1);
+    const wet = groundAt(b.x, b.z) < WATER;
+    for (let k = 0; k < 16; k++) puff(b.x + (Math.random() - .5) * 2, Math.max(b.y, g) + .3, b.z + (Math.random() - .5) * 2, wet ? [.9, .96, 1] : [.55, .45, .32], 0.45, wet ? 6 : 3, 0.2);
+    tone(wet ? 140 : 70, 0, 0.3, wet ? 'triangle' : 'square', 0.07 * clamp(1 - dc / 120, 0.1, 1));
+    if (direct || (dc < 4 && Math.abs(b.y - car.y) < 4)) {
+      const nx = (car.x - b.x) / (dc || 1), nz = (car.z - b.z) / (dc || 1);
+      car.vx += b.vx * 0.25 + nx * 6; car.vz += b.vz * 0.25 + nz * 6;
+      if (car.fly) car.vy -= 6; else car.pop = Math.max(car.pop, 8);
+      car.rv += (Math.random() - .5) * 6; shake = Math.max(shake, 0.55); sfxThump(); popText('BROADSIDE!');
+    }
+  }
+}
 function spawnHerd(hd) {
   const S = SPECIES[hd.kind];
   for (let i = 0; i < hd.n && animals.length < 44; i++) {
@@ -2614,18 +2859,378 @@ function updateAnimals(dt) {
 function updateBoats(dt) {
   const now = Date.now() / 1000;
   for (const o of boatsAct) {
-    const [bx, , bz, yaw] = orbitPos(o, now, o.w), dx = car.x - bx, dz = car.z - bz, d = hyp(dx, dz);
-    if (d > 180) continue;
+    const [bx, by, bz, yaw, , , sub] = vesselPose(o, now), V = VESSEL[o.v], fx = Math.sin(yaw), fz = Math.cos(yaw), dx = car.x - bx, dz = car.z - bz, d = hyp(dx, dz);
+    if (d > 200) continue;
     o.wake -= dt; o.hornT -= dt;
-    if (o.wake <= 0) { o.wake = o.v === 2 ? 0.05 : 0.14; puff(bx - Math.sin(yaw) * 5.2, WATER + .15, bz - Math.cos(yaw) * 5.2, o.glam ? PINKS[0] : [.92, .97, 1], o.v === 2 ? 0.5 : 0.32, o.v === 2 ? 2.2 : 0.8); }
-    if (d > 11 || car.y > WATER + (o.v === 1 ? 13.5 : o.v === 0 ? 6 : 2.6)) continue;
-    const al = clamp(dx * Math.sin(yaw) + dz * Math.cos(yaw), -5, 5.8), ex = car.x - bx - Math.sin(yaw) * al, ez = car.z - bz - Math.cos(yaw) * al, e = hyp(ex, ez) || 1;
-    if (e > 3.3) continue;
-    // ran into it: the boat carries on, the truck does not
-    car.x += ex / e * (3.3 - e); car.z += ez / e * (3.3 - e); car.vx = ex / e * 9; car.vz = ez / e * 9;
-    if (car.fly) { car.fly = false; car.vy = Math.min(car.vy, 3); sfxCrunch(); popText('CRUNCH'); }
+    if (o.wake <= 0 && sub < 0.4) {      // a wake behind, or a ripple round a fin
+      o.wake = o.v === 2 ? 0.05 : o.v === 6 ? 0.1 : 0.14;
+      if (o.v === 6) puff(bx + fx * .4, WATER + .1, bz + fz * .4, [.92, .97, 1], 0.22, 0.6);
+      else puff(bx - fx * (V.aft + .2), WATER + .15, bz - fz * (V.aft + .2), o.glam ? PINKS[0] : [.92, .97, 1], o.v === 2 ? 0.5 : o.v === 3 ? 0.5 : 0.32, o.v === 2 ? 2.2 : 0.8);
+    }
+    if (o.v === 5 && sub < 0.15 && (o.spoutT -= dt) <= 0) {      // the whale blows
+      o.spoutT = 5 + Math.random() * 4;
+      for (let k = 0; k < 16; k++) parts.push({ x: bx + fx * 5.7 + (Math.random() - .5) * .6, y: by + 1.6, z: bz + fz * 5.7 + (Math.random() - .5) * .6, vx: (Math.random() - .5) * 1.6, vy: 6 + Math.random() * 6, vz: (Math.random() - .5) * 1.6, life: 1.2, t: 0, size: 0.42, col: [.92, .97, 1], em: 0.5 });
+      if (parts.length > 260) parts.splice(0, parts.length - 260);
+      if (d < 90) tone(110, 0, 0.6, 'sine', 0.04 * (1 - d / 90));
+    }
+    if (o.v === 3 && !o.glam) pirateGuns(o, bx, bz, yaw, d, dt);
+    if (sub > 0.6 || d > V.fore + V.hw + 2 || car.y > by + V.ht) continue;
+    const al = clamp(dx * fx + dz * fz, -V.aft, V.fore), ex = car.x - bx - fx * al, ez = car.z - bz - fz * al, e = hyp(ex, ez) || 1;
+    if (e > V.hw) continue;
+    // ran into it: it carries on, the truck does not
+    car.x += ex / e * (V.hw - e); car.z += ez / e * (V.hw - e); car.vx = ex / e * 9; car.vz = ez / e * 9;
+    if (car.fly) { car.fly = false; car.vy = Math.min(car.vy, 3); sfxCrunch(); }
     shake = Math.max(shake, 0.5); sfxThump();
-    if (o.hornT <= 0) { o.hornT = 2; tone(o.v === 2 ? 330 : 165, 0, 0.5, 'square', 0.07); tone(o.v === 2 ? 392 : 196, 0.05, 0.5, 'square', 0.05); }
+    if (o.hornT <= 0) {
+      o.hornT = 2;
+      if (o.v === 6) popText('CHOMP!'); else if (o.v === 5) popText('WHUMP!'); else if (o.v === 3) popText('ALL HANDS!'); else if (car.fly) popText('CRUNCH');
+      if (o.v <= 4) { tone(o.v === 2 ? 330 : 165, 0, 0.5, 'square', 0.07); tone(o.v === 2 ? 392 : 196, 0.05, 0.5, 'square', 0.05); }
+    }
+  }
+  updateBalls(dt);
+}
+
+// ───────────────────────── the racetrack: drivers good, bad and drunk ─────────────────────────
+const RACERS = [      // top: top speed; lat: how hard they dare corner
+  { name: 'Max Velo', skill: 'ace', col: [.9, .12, .1], top: 37, lat: 44 },
+  { name: 'Ines Apex', skill: 'good', col: [.15, .45, .95], top: 35, lat: 36 },
+  { name: 'Tom Middling', skill: 'average', col: [.2, .72, .32], top: 31.5, lat: 27 },
+  { name: 'Gary Gravel', skill: 'poor', col: [.62, .32, .88], top: 28, lat: 19 },
+  { name: 'Sloshy Steve', skill: 'drunk', col: [1, .78, .1], top: 33, lat: 30 },
+  { name: 'Wobbly Wanda', skill: 'drunk', col: [1, .48, .76], top: 31.5, lat: 28 },
+];
+function makeRacer(col) {      // a low single-seater with wings front and back
+  const m = new MB(); m.lo = .9; const dk = [.12, .12, .14], w = [.95, .95, .95];
+  m.box(-.55, .35, -1.9, .55, .8, 1.5, col); m.box(-.3, .35, 1.5, .3, .62, 2.5, col); m.box(-1.15, .3, 2.35, 1.15, .42, 2.75, dk);
+  m.box(-1, .95, -2.25, 1, 1.1, -1.75, col); m.box(-.08, .8, -2.05, .08, .95, -1.85, dk); m.box(-1, .5, -2.25, -.92, 1.1, -1.75, dk); m.box(.92, .5, -2.25, 1, 1.1, -1.75, dk);
+  m.box(-.85, .3, -.9, -.55, .75, .4, col); m.box(.55, .3, -.9, .85, .75, .4, col); m.box(-.25, .8, -.5, .25, 1.15, .2, dk); m.box(-.22, 1, -.3, .22, 1.35, .1, w); m.box(-.3, .62, 1.6, .3, .64, 2.3, w);
+  return makeMesh(m);
+}
+const racerMesh = RACERS.map(d => makeRacer(d.col)), RWHEELS = [[.95, 1.35], [-.95, 1.35], [.95, -1.3], [-.95, -1.3]];
+const trackProg = (i, lap, half, N) => lap * N + (half || i < N / 2 ? i : i - N);      // how far round: a lap and a bit, counting the grid as just behind the line
+function nearTrack() { for (const l of landmarks) if (l.kind === 'track' && hyp(l.x - car.x, l.z - car.z) < l.pad + 50) return l; return null; }
+function newRacer(k, t, idx, lane) {
+  const p = t.pts[idx], n = t.nrm[idx], q = t.pts[(idx + 2) % t.N], x = p[0] + n[0] * lane, z = p[1] + n[1] * lane;
+  return { def: RACERS[k], mesh: racerMesh[k], x, z, y: groundAt(x, z), h: Math.atan2(q[0] - p[0], q[1] - p[1]), v: 0, i: idx, lap: 0, half: false, base: lane, lane, lat: lane,
+    t: Math.random() * 10, ph: Math.random() * 6.28, sw: 0, swT: 2 + Math.random() * 3, spinT: 0, spinNext: 14 + Math.random() * 18, wideT: 0, wideNext: 6 + Math.random() * 8, passT: 0, passLane: 0, bumpT: 0, glam: false, spin: 0, fin: 0 };
+}
+function spawnRacers(st) {      // already out on track, spread round the lap
+  const t = trackOf(st);
+  return RACERS.map((d, k) => { const r = newRacer(k, t, Math.floor(k * t.N / RACERS.length), (k % 3 - 1) * 3); r.v = 18; r.half = true; return r; });
+}
+function startTrackRace(st) {
+  if (race) endRace();
+  npcs.length = 0; car.fly = false;
+  const t = trackOf(st), GRID = [0, 4, 1, -1, 5, 2, 3];      // the ace on pole, a drunk alongside, and you on the second row
+  trackAct = st; racers = [];
+  let me = null;
+  GRID.forEach((k, slot) => {
+    const idx = (t.N - 10 - (slot >> 1) * 9) % t.N, lane = (slot & 1 ? 1 : -1) * 3.6;
+    if (k < 0) me = [idx, lane]; else racers.push(newRacer(k, t, idx, lane));
+  });
+  const [idx, lane] = me, p = t.pts[idx], n = t.nrm[idx], q = t.pts[(idx + 2) % t.N];
+  car.x = p[0] + n[0] * lane; car.z = p[1] + n[1] * lane; car.h = Math.atan2(q[0] - p[0], q[1] - p[1]); car.vx = car.vz = car.vy = 0; settle(); camYaw = car.h;
+  trackRace = { st, cd: 3.4, laps: 5, lap: 0, i: idx, half: false, t: 0, lapT: 0, best: 0, last: 0, done: false, doneT: 0, fins: 0, winner: '', warnT: 0, place: 0 };
+  pickTarget(); updateHud();
+  toast('ON THE GRID', st.name, 'Five laps against six drivers. Go when the lights go out. Press 3 to retire.', 4);
+}
+function endTrackRace(quit) {
+  trackRace = null; syncNpcs(); pickTarget(); updateHud();
+  if (quit) toast('RETIRED', 'Out of the race', 'Press 3 at a racetrack to race again.', 3);
+}
+function updateTrackRace(dt, t) {
+  const tr = trackRace, N = t.N;
+  tr.t += dt;
+  if (tr.cd > 0) {
+    const was = Math.floor((3.4 - tr.cd) / 0.6);
+    tr.cd -= dt;
+    if (tr.cd <= 0) { popText('GO!'); tone(880, 0, 0.6, 'square', 0.08); tr.lapT = 0; }
+    else if (Math.floor((3.4 - tr.cd) / 0.6) > was) tone(440, 0, 0.18, 'square', 0.07);
+    return;
+  }
+  if (tr.done) { tr.doneT -= dt; if (tr.doneT <= 0) endTrackRace(false); return; }
+  if (hyp(car.x - tr.st.x, car.z - tr.st.z) > tr.st.pad + 140) { endTrackRace(true); return; }
+  tr.lapT += dt; tr.warnT -= dt;
+  let bi = tr.i, bd = 1e9;      // where the truck has got to: the nearest point of the lap, looking a little way either side of the last one
+  for (let k = -25; k <= 25; k++) { const j = (tr.i + k + N) % N, p = t.pts[j], dx = p[0] - car.x, dz = p[1] - car.z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = j; } }
+  if (bd > 400) {      // well off the line: take the nearest bit of track, unless that would be a short cut
+    let fj = bi, fd = 1e9;
+    for (let j = 0; j < N; j += 2) { const p = t.pts[j], dx = p[0] - car.x, dz = p[1] - car.z, d = dx * dx + dz * dz; if (d < fd) { fd = d; fj = j; } }
+    const fwd = (fj - tr.i + N) % N;
+    if (fwd < 70 || fwd > N - 300) bi = fj;
+    else { bi = tr.i; if (tr.warnT <= 0) { tr.warnT = 3; popText('SHORT CUT! GO BACK'); } }
+  }
+  if (tr.i > N * 0.75 && bi < N * 0.25) {
+    if (tr.half) {
+      tr.lap++; tr.half = false; tr.last = tr.lapT; if (!tr.best || tr.lapT < tr.best) tr.best = tr.lapT; tr.lapT = 0;
+      if (tr.lap >= tr.laps) {
+        tr.place = ++tr.fins; tr.done = true; tr.doneT = 9;
+        if (tr.place === 1) { toast('YOU WIN', tr.st.name, `First of ${racers.length + 1}. Best lap ${tr.best.toFixed(1)} s.`, 7); popText('WINNER!'); [523, 659, 784, 1047, 1319].forEach((f, k) => tone(f, k * 0.1, 0.4)); }
+        else { toast('FINISHED P' + tr.place, tr.st.name, `${tr.winner} won. Your best lap ${tr.best.toFixed(1)} s.`, 7); popText('P' + tr.place); [392, 330].forEach((f, k) => tone(f, k * 0.15, 0.35, 'square', 0.06)); }
+        for (let k = 0; k < 24; k++) puff(car.x + (Math.random() - .5) * 6, car.y + 2 + Math.random() * 3, car.z + (Math.random() - .5) * 6, CROWD[k % CROWD.length], 0.4, 5, 0.8);
+      } else { popText(tr.lap === tr.laps - 1 ? 'FINAL LAP' : 'LAP ' + (tr.lap + 1)); tone(660, 0, 0.2); }
+    }
+  } else if (tr.i < N * 0.25 && bi > N * 0.75) { if (tr.lap > 0) { tr.lap--; tr.half = true; } }
+  else if (bi > N * 0.4 && bi < N * 0.6) tr.half = true;
+  tr.i = bi;
+}
+function updateRacers(dt) {
+  if ((trackT -= dt) <= 0) {      // which track, if any, is close enough to bother with
+    trackT = 1;
+    if (trackAct && !trackRace && hyp(trackAct.x - car.x, trackAct.z - car.z) > 700) { trackAct = null; racers = []; }
+    if (!trackAct) for (const l of landmarks) if (l.kind === 'track' && hyp(l.x - car.x, l.z - car.z) < 480) { trackAct = l; racers = spawnRacers(l); break; }
+  }
+  if (!trackAct) return;
+  const t = trackOf(trackAct), N = t.N, tr = trackRace, hold = !!tr && tr.cd > 0;
+  for (const r of racers) {
+    const D = r.def; r.t += dt;
+    let bi = r.i, bd = 1e9;
+    for (let k = -4; k <= 16; k++) { const j = (r.i + k + N) % N, p = t.pts[j], dx = p[0] - r.x, dz = p[1] - r.z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = j; } }
+    if (r.i > N * 0.75 && bi < N * 0.25) { if (r.half) { r.lap++; r.half = false; if (tr && !tr.done && r.lap >= tr.laps && !r.fin) { r.fin = ++tr.fins; if (r.fin === 1) tr.winner = D.name; } } }
+    else if (bi > N * 0.4 && bi < N * 0.6) r.half = true;
+    r.i = bi;
+    const pi = t.pts[bi], ni = t.nrm[bi];
+    r.lat = (r.x - pi[0]) * ni[0] + (r.z - pi[1]) * ni[1];
+    const off = Math.abs(r.lat);
+    // what goes wrong for each of them
+    if (D.skill === 'drunk' && !hold) {
+      if ((r.swT -= dt) <= 0) { r.swT = 2 + Math.random() * 4; r.sw = (Math.random() - .5) * 13; if (hyp(r.x - car.x, r.z - car.z) < 40) { popText('HIC!'); tone(900, 0, 0.08, 'sine', 0.05); tone(1250, 0.06, 0.06, 'sine', 0.04); } }
+      r.sw *= Math.exp(-1.2 * dt);
+      if ((r.spinNext -= dt) <= 0) { r.spinNext = 18 + Math.random() * 24; r.spinT = 1.7; }
+    } else if (D.skill === 'poor' && !hold && (r.wideNext -= dt) <= 0) { r.wideNext = 9 + Math.random() * 9; r.wideT = 2.5; }
+    if (r.wideT > 0) r.wideT -= dt;
+    // overtaking: someone slower just ahead in the same line, so pull out to the other side
+    if (r.passT > 0) r.passT -= dt;
+    for (const o of racers) if (o !== r) { const dp = (o.i - r.i + N) % N; if (dp > 0 && dp < 14 && Math.abs(o.lat - r.lat) < 3.2 && o.v < r.v + 1) { r.passT = 2; r.passLane = o.lat > 0 ? -4.5 : 4.5; } }
+    if (tr && !hold) { const dp = (tr.i - r.i + N) % N, cl = (car.x - pi[0]) * ni[0] + (car.z - pi[1]) * ni[1]; if (dp > 0 && dp < 14 && Math.abs(cl - r.lat) < 3.4) { r.passT = 2; r.passLane = cl > 0 ? -4.5 : 4.5; } }
+    let lane = r.passT > 0 ? r.passLane : r.base;
+    if (D.skill === 'drunk') lane += Math.sin(r.t * 1.3 + r.ph) * 3 + Math.sin(r.t * 0.41 + r.ph * 2) * 2.4 + r.sw;
+    lane = clamp(lane, -9.5, 9.5);
+    const j = (r.i + Math.round(5 + r.v * 0.35)) % N, p = t.pts[j], n = t.nrm[j], want = Math.atan2(p[0] + n[0] * lane - r.x, p[1] + n[1] * lane - r.z);
+    const lat = D.lat * (r.wideT > 0 ? 1.8 : 1);      // a poor driver now and then brakes too late and runs wide
+    let vt = D.top;
+    for (let k = 3; k < 72; k += 3) { const vc = Math.sqrt(lat * t.R[(r.i + k) % N]), al = Math.sqrt(vc * vc + 32 * k); if (al < vt) vt = al; }
+    if (off > 10) vt = Math.min(vt, 14);
+    if (r.spinT > 0) { r.spinT -= dt; r.h += 7.5 * dt; r.v *= Math.exp(-2.2 * dt); if (Math.random() < 0.6) puff(r.x, r.y + .3, r.z, [.8, .8, .82], 0.5, 1.2); }
+    else {
+      const tm = clamp(D.lat * 1.35 / Math.max(r.v, 4), 0.6, 3);
+      r.h += clamp(angDiff(want, r.h), -tm * dt, tm * dt);
+      r.v += clamp(vt - r.v, -22 * dt, (r.v < 14 ? 15 : 9) * dt);
+    }
+    if (hold) r.v = 0;
+    r.x += Math.sin(r.h) * r.v * dt; r.z += Math.cos(r.h) * r.v * dt; r.y = groundAt(r.x, r.z); r.spin += r.v / 0.4 * dt;
+    if (off > 10 && r.v > 8 && Math.random() < 0.4) puff(r.x - Math.sin(r.h) * 2, r.y + .2, r.z - Math.cos(r.h) * 2, DUST[GRASS], 0.4, 1.2);
+    // the truck: rubbing is racing
+    const dx = r.x - car.x, dz = r.z - car.z, d = hyp(dx, dz);
+    if (r.bumpT > 0) r.bumpT -= dt;
+    if (d < 3.3 && d > 1e-3 && !car.fly && Math.abs(car.y - r.y) < 2.5) {
+      const nx = dx / d, nz = dz / d, push = (3.3 - d) / 2;
+      r.x += nx * push; r.z += nz * push; car.x -= nx * push; car.z -= nz * push;
+      const rel = (car.vx - Math.sin(r.h) * r.v) * nx + (car.vz - Math.cos(r.h) * r.v) * nz;
+      if (rel > 0) { car.vx -= nx * rel * 0.6; car.vz -= nz * rel * 0.6; r.v = Math.max(0, r.v - rel * 0.4); r.h += (Math.random() - .5) * rel * 0.04; }
+      if (rel > 5 && r.bumpT <= 0) {
+        r.bumpT = 0.8; sfxThump(); shake = Math.max(shake, 0.25); car.rv += (Math.random() - .5) * 3;
+        popText(D.skill === 'drunk' ? 'OI! WATCH IT' : rel > 12 ? D.name.toUpperCase() + ' IS NOT IMPRESSED' : 'RUBBING!');
+        if (rel > 14) r.spinT = 1.2;
+      }
+    }
+  }
+  for (let a = 0; a < racers.length; a++) for (let b = a + 1; b < racers.length; b++) {      // and with each other
+    const A = racers[a], B = racers[b], dx = B.x - A.x, dz = B.z - A.z, d = hyp(dx, dz);
+    if (d < 2.9 && d > 1e-3) { const k = (2.9 - d) / 2 / d; A.x -= dx * k; A.z -= dz * k; B.x += dx * k; B.z += dz * k; (dx * Math.sin(A.h) + dz * Math.cos(A.h) > 0 ? A : B).v *= 0.96; }
+  }
+  if (tr) updateTrackRace(dt, t);
+}
+
+// ───────────────────────── street racers: packs racing along the roads ─────────────────────────
+// Each pack follows the road network from place to place, choosing a new road at every junction, and races itself the whole way.
+// Its route is laid out a little ahead of it, two metres a point, and dropped behind it. Press 3 alongside one to race it to a finish line down the road.
+const SKILL = { ace: { top: 38, lat: 44 }, good: { top: 35.5, lat: 36 }, average: { top: 32, lat: 27 }, poor: { top: 28, lat: 19 }, drunk: { top: 33, lat: 29 } };
+const PACKS = [
+  { name: 'The Street Kings', skills: ['ace', 'good', 'good', 'average'] },
+  { name: 'The Sunday Club', skills: ['average', 'poor', 'average', 'poor', 'average'] },
+  { name: 'The Pub Crawl', skills: ['drunk', 'drunk', 'drunk', 'average'] },
+  { name: 'The Rally Lot', skills: ['good', 'ace', 'average', 'good'] },
+  { name: 'The Learner Drivers', skills: ['poor', 'poor', 'poor'] },
+  { name: 'The Mixed Bag', skills: ['ace', 'average', 'poor', 'drunk'] },
+];
+const FIRST = ['Rex', 'Dot', 'Vinnie', 'Pearl', 'Sid', 'Mags', 'Lenny', 'Bev', 'Otis', 'Fay', 'Gus', 'Nora', 'Clem', 'Ivy', 'Moe', 'Tess'], LAST = ['Throttle', 'Skid', 'Gasket', 'Revs', 'Lugnut', 'Burnout', 'Clutch', 'Piston', 'Spanner', 'Torque', 'Drift', 'Camber'];
+const STREETC = [[.9, .15, .12], [.15, .4, .9], [.95, .8, .1], [.15, .65, .3], [.95, .95, .95], [.12, .12, .14], [.95, .5, .1], [.6, .25, .85], [.2, .75, .8], [.98, .55, .75]];
+function makeStreetCar(col, stripe) {      // a low two-door with a stripe down the middle and a wing on the back
+  const m = new MB(); m.lo = .9; const dk = [.12, .12, .14], glass = [.2, .32, .45];
+  m.box(-.95, .35, -2.1, .95, 1, 2.1, col); m.box(-.8, 1, -1.2, .8, 1.55, .6, col);
+  m.box(-.78, 1.05, .6, .78, 1.5, .66, glass); m.box(-.78, 1.05, -1.26, .78, 1.5, -1.2, glass); m.box(-.82, 1.08, -1, -.8, 1.48, .45, glass); m.box(.8, 1.08, -1, .82, 1.48, .45, glass);
+  m.box(-.25, 1, .6, .25, 1.02, 2.1, stripe); m.box(-.25, 1.55, -1.2, .25, 1.57, .6, stripe); m.box(-.25, 1, -2.1, .25, 1.02, -1.2, stripe);
+  m.box(-.95, 1.3, -2.15, .95, 1.4, -1.8, dk); m.box(-.7, 1, -2, -.6, 1.3, -1.9, dk); m.box(.6, 1, -2, .7, 1.3, -1.9, dk); m.box(-1, .3, -2.2, 1, .55, 2.2, dk);
+  m.flag = 16; m.box(-.85, .7, 2.1, -.5, .9, 2.14, [1, .95, .75]); m.box(.5, .7, 2.1, .85, .9, 2.14, [1, .95, .75]); m.box(-.85, .7, -2.14, -.5, .9, -2.1, [.9, .1, .08]); m.box(.5, .7, -2.14, .85, .9, -2.1, [.9, .1, .08]); m.flag = 0;
+  return makeMesh(m);
+}
+const streetMesh = STREETC.map((c, i) => makeStreetCar(c, i === 4 ? [.12, .12, .14] : [.95, .95, .95])), SWHEELS = [[.95, 1.35], [-.95, 1.35], [.95, -1.35], [-.95, -1.35]];
+const allRacers = () => packs.length ? racers.concat(...packs.map(p => p.cars)) : racers;
+const edgeCached = (rx, rz, dir) => edgeCache.get(rkey(rx, rz) * 2 + dir);      // a road already worked out; packs never wait for a new one
+function appendPath(pk, pts) {
+  for (const [x, z] of pts) {
+    let last = pk.pts[pk.pts.length - 1];
+    if (!last) { pk.pts.push([x, z]); continue; }
+    let d = hyp(x - last[0], z - last[1]);
+    while (d >= 2) { const k = 2 / d; last = [last[0] + (x - last[0]) * k, last[1] + (z - last[1]) * k]; pk.pts.push(last); d -= 2; }
+  }
+}
+function arcAround(st, p0, p1) {      // round the edge of a town or a landmark's yard from where one road stops to where the next one starts
+  if (!st || !st.pad || !p0) return [];
+  const rr = st.kind === 'city' ? st.pad - 4.5 : st.pad + 4, a0 = Math.atan2(p0[1] - st.z, p0[0] - st.x);
+  let da = Math.atan2(p1[1] - st.z, p1[0] - st.x) - a0;
+  while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+  const out = [], n = Math.max(1, Math.ceil(Math.abs(da) * rr / 3));
+  for (let k = 0; k <= n; k++) { const a = a0 + da * k / n; out.push([st.x + Math.cos(a) * rr, st.z + Math.sin(a) * rr]); }
+  return out;
+}
+function extendPack(pk) {      // at the end of the route so far: pick another road out of the place it reaches
+  const [nx, nz] = pk.node;
+  const opts = [[nx, nz, 0, false, [nx + 1, nz]], [nx, nz, 1, false, [nx, nz + 1]], [nx - 1, nz, 0, true, [nx - 1, nz]], [nx, nz - 1, 1, true, [nx, nz - 1]]]
+    .map(o => ({ e: edgeCached(o[0], o[1], o[2]), key: rkey(o[0], o[1]) * 2 + o[2], rev: o[3], to: o[4] })).filter(o => o.e);
+  let pick = opts.filter(o => o.key !== pk.from);
+  if (!pick.length) pick = opts;      // a dead end: back the way it came
+  if (!pick.length) return false;
+  const o = pick[Math.floor(Math.random() * pick.length)], ep = o.rev ? o.e.pts.slice().reverse() : o.e.pts;
+  appendPath(pk, arcAround(siteOf(nx, nz), pk.pts[pk.pts.length - 1], ep[0]));
+  appendPath(pk, ep);
+  pk.node = o.to; pk.from = o.key;
+  return true;
+}
+const pkPt = (pk, a) => pk.pts[clamp(a, pk.off, pk.off + pk.pts.length - 1) - pk.off];
+function pkNrm(pk, a) { const p0 = pkPt(pk, a - 1), p1 = pkPt(pk, a + 1), l = hyp(p1[0] - p0[0], p1[1] - p0[1]) || 1; return [-(p1[1] - p0[1]) / l, (p1[0] - p0[0]) / l]; }
+function pkR(pk, a) {      // how tight the road bends here
+  const p0 = pkPt(pk, a - 3), p1 = pkPt(pk, a), p2 = pkPt(pk, a + 3), ax = p1[0] - p0[0], az = p1[1] - p0[1], bx = p2[0] - p1[0], bz = p2[1] - p1[1], la = hyp(ax, az), lb = hyp(bx, bz);
+  if (la < 1e-3 || lb < 1e-3) return 500;
+  return Math.min(500, 6 / Math.max(Math.acos(clamp((ax * bx + az * bz) / (la * lb), -1, 1)), 1e-3));
+}
+function newStreetCar(pk, sk, a, lane) {
+  const S = SKILL[sk], first = FIRST[Math.floor(Math.random() * FIRST.length)], ci = Math.floor(Math.random() * STREETC.length), p = pkPt(pk, a), q = pkPt(pk, a + 1);
+  return { def: { name: sk === 'drunk' ? 'Tipsy ' + first : first + ' ' + LAST[Math.floor(Math.random() * LAST.length)], skill: sk, top: S.top * (0.97 + Math.random() * 0.06), lat: S.lat, col: STREETC[ci] },
+    mesh: streetMesh[ci], wh: SWHEELS, ws: .72, x: p[0], z: p[1], y: groundAt(p[0], p[1]), h: Math.atan2(q[0] - p[0], q[1] - p[1]), v: 20, a, base: lane, lat: lane,
+    t: Math.random() * 10, ph: Math.random() * 6.28, sw: 0, swT: 2 + Math.random() * 3, spinT: 0, spinNext: 14 + Math.random() * 18, wideT: 0, wideNext: 6 + Math.random() * 8, passT: 0, passLane: 0, bumpT: 0, glam: false, spin: 0, fin: 0 };
+}
+function spawnPack() {      // a new pack on one of the roads round about, out of sight ahead or behind
+  const rx = Math.floor(car.x) >> RSH, rz = Math.floor(car.z) >> RSH, cand = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) for (const dir of [0, 1]) {
+    const e = edgeCached(rx + dx, rz + dz, dir);
+    if (e) for (let i = 4; i < e.pts.length - 4; i += 3) { const d = hyp(e.pts[i][0] - car.x, e.pts[i][1] - car.z); if (d > 170 && d < 430) cand.push([e, i, rx + dx, rz + dz, dir]); }
+  }
+  if (!cand.length) return;
+  const [e, i, ex, ez, dir] = cand[Math.floor(Math.random() * cand.length)], fwd = Math.random() < 0.5, T = PACKS[Math.floor(Math.random() * PACKS.length)];
+  const pk = { name: T.name, pts: [], off: 0, node: fwd ? (dir ? [ex, ez + 1] : [ex + 1, ez]) : [ex, ez], from: rkey(ex, ez) * 2 + dir, cars: [] };
+  appendPath(pk, fwd ? e.pts.slice(i) : e.pts.slice(0, i + 1).reverse());
+  while (pk.pts.length < 160 && extendPack(pk));
+  if (pk.pts.length < 40) return;
+  const n = T.skills.length;
+  T.skills.forEach((sk, k) => pk.cars.push(newStreetCar(pk, sk, 2 + (n - 1 - k) * 5, k & 1 ? 4.5 : 1.5)));
+  packs.push(pk);
+}
+function nearPack() { let best = null, bd = 60; for (const pk of packs) for (const c of pk.cars) { const d = hyp(c.x - car.x, c.z - car.z); if (d < bd) { bd = d; best = pk; } } return best; }
+function updatePacks(dt) {
+  if ((packT -= dt) <= 0) {
+    packT = 4;
+    for (let k = packs.length - 1; k >= 0; k--) { const pk = packs[k]; if (!(roadRace && roadRace.pack === pk) && pk.cars.every(c => hyp(c.x - car.x, c.z - car.z) > 900)) packs.splice(k, 1); }
+    if (packs.length < 3 && Math.random() < 0.75) spawnPack();
+  }
+  for (const pk of packs) updatePack(pk, dt);
+  if (roadRace) updateRoadRace(dt);
+}
+function updatePack(pk, dt) {
+  const racing = !!roadRace && roadRace.pack === pk;
+  let minA = 1e9, maxA = -1e9;
+  for (const c of pk.cars) { if (c.a < minA) minA = c.a; if (c.a > maxA) maxA = c.a; }
+  while (pk.off + pk.pts.length < maxA + 160 && extendPack(pk));
+  const cut = Math.min(minA, racing ? roadRace.i : 1e9) - 30 - pk.off;
+  if (cut > 200) { pk.pts.splice(0, cut); pk.off += cut; }
+  const L = pk.off + pk.pts.length - 1;
+  for (const c of pk.cars) {
+    const D = c.def; c.t += dt;
+    let bi = c.a, bd = 1e9;
+    for (let k = -3; k <= 10; k++) { const j = clamp(c.a + k, pk.off, L), p = pkPt(pk, j), dx = p[0] - c.x, dz = p[1] - c.z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = j; } }
+    c.a = bi;
+    const pi = pkPt(pk, bi), [nx, nz] = pkNrm(pk, bi);
+    c.lat = (c.x - pi[0]) * nx + (c.z - pi[1]) * nz;
+    if (D.skill === 'drunk') {
+      if ((c.swT -= dt) <= 0) { c.swT = 2 + Math.random() * 4; c.sw = (Math.random() - .5) * 11; if (hyp(c.x - car.x, c.z - car.z) < 40) { popText('HIC!'); tone(900, 0, 0.08, 'sine', 0.05); tone(1250, 0.06, 0.06, 'sine', 0.04); } }
+      c.sw *= Math.exp(-1.2 * dt);
+      if ((c.spinNext -= dt) <= 0) { c.spinNext = 18 + Math.random() * 24; c.spinT = 1.7; }
+    } else if (D.skill === 'poor' && (c.wideNext -= dt) <= 0) { c.wideNext = 9 + Math.random() * 9; c.wideT = 2.5; }
+    if (c.wideT > 0) c.wideT -= dt;
+    if (c.passT > 0) c.passT -= dt;
+    for (const o of pk.cars) if (o !== c) { const da = o.a - c.a; if (da > 0 && da < 7 && Math.abs(o.lat - c.lat) < 3.2 && o.v < c.v + 1) { c.passT = 2; c.passLane = o.lat > 0 ? o.lat - 4 : o.lat + 4; } }
+    if (racing) { const da = roadRace.i - c.a, pp = pkPt(pk, roadRace.i), cl = (car.x - pp[0]) * nx + (car.z - pp[1]) * nz; if (da > 0 && da < 7 && Math.abs(cl - c.lat) < 3.4) { c.passT = 2; c.passLane = cl > 0 ? cl - 4 : cl + 4; } }
+    let lane = c.passT > 0 ? c.passLane : c.base;
+    if (D.skill === 'drunk') lane += Math.sin(c.t * 1.3 + c.ph) * 2.6 + Math.sin(c.t * 0.41 + c.ph * 2) * 2 + c.sw;
+    lane = clamp(lane, -6.5, 6.5);
+    const j = c.a + Math.round(3 + c.v * 0.18), p = pkPt(pk, j), [mx, mz] = pkNrm(pk, j), want = Math.atan2(p[0] + mx * lane - c.x, p[1] + mz * lane - c.z);
+    const lat = D.lat * (c.wideT > 0 ? 1.8 : 1);
+    let vt = D.top;
+    for (let k = 2; k < 38; k += 2) { const vc = Math.sqrt(lat * pkR(pk, c.a + k)), al = Math.sqrt(vc * vc + 64 * k); if (al < vt) vt = al; }
+    if (!racing && c.a === maxA && maxA - minA > 40) vt *= 0.8;      // out for fun, the leader lets the rest catch up
+    if (c.a >= L - 4) vt = 0;
+    if (c.spinT > 0) { c.spinT -= dt; c.h += 7.5 * dt; c.v *= Math.exp(-2.2 * dt); if (Math.random() < 0.6) puff(c.x, c.y + .3, c.z, [.8, .8, .82], 0.5, 1.2); }
+    else {
+      const tm = clamp(D.lat * 1.35 / Math.max(c.v, 4), 0.6, 3);
+      c.h += clamp(angDiff(want, c.h), -tm * dt, tm * dt);
+      c.v += clamp(vt - c.v, -22 * dt, (c.v < 14 ? 15 : 9) * dt);
+    }
+    c.x += Math.sin(c.h) * c.v * dt; c.z += Math.cos(c.h) * c.v * dt; c.y = groundAt(c.x, c.z); c.spin += c.v / 0.43 * dt;
+    racerBump(c, dt);
+  }
+  for (let a = 0; a < pk.cars.length; a++) for (let b = a + 1; b < pk.cars.length; b++) {
+    const A = pk.cars[a], B = pk.cars[b], dx = B.x - A.x, dz = B.z - A.z, d = hyp(dx, dz);
+    if (d < 3 && d > 1e-3) { const k = (3 - d) / 2 / d; A.x -= dx * k; A.z -= dz * k; B.x += dx * k; B.z += dz * k; (A.a < B.a ? A : B).v *= 0.96; }
+  }
+}
+function racerBump(r, dt) {      // a racing car and the truck: rubbing is racing
+  const dx = r.x - car.x, dz = r.z - car.z, d = hyp(dx, dz);
+  if (r.bumpT > 0) r.bumpT -= dt;
+  if (d >= 3.3 || d < 1e-3 || car.fly || Math.abs(car.y - r.y) >= 2.5) return;
+  const nx = dx / d, nz = dz / d, push = (3.3 - d) / 2;
+  r.x += nx * push; r.z += nz * push; car.x -= nx * push; car.z -= nz * push;
+  const rel = (car.vx - Math.sin(r.h) * r.v) * nx + (car.vz - Math.cos(r.h) * r.v) * nz;
+  if (rel > 0) { car.vx -= nx * rel * 0.6; car.vz -= nz * rel * 0.6; r.v = Math.max(0, r.v - rel * 0.4); r.h += (Math.random() - .5) * rel * 0.04; }
+  if (rel > 5 && r.bumpT <= 0) {
+    r.bumpT = 0.8; sfxThump(); shake = Math.max(shake, 0.25); car.rv += (Math.random() - .5) * 3;
+    popText(r.def.skill === 'drunk' ? 'OI! WATCH IT' : rel > 12 ? r.def.name.toUpperCase() + ' IS NOT IMPRESSED' : 'RUBBING!');
+    if (rel > 14) r.spinT = 1.2;
+  }
+}
+function joinRoadRace(pk) {      // race the pack to a finish line about 900 m down the road
+  if (race) endRace();
+  npcs.length = 0; car.fly = false;
+  let maxA = -1e9, bi = pk.off, bd = 1e9;
+  for (const c of pk.cars) maxA = Math.max(maxA, c.a);
+  for (let j = pk.off; j < pk.off + pk.pts.length; j++) { const p = pk.pts[j - pk.off], dx = p[0] - car.x, dz = p[1] - car.z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = j; } }
+  const goal = Math.max(maxA, bi) + 450;
+  while (pk.off + pk.pts.length < goal + 40 && extendPack(pk));
+  for (const c of pk.cars) c.fin = 0;
+  roadRace = { pack: pk, goal: Math.min(goal, pk.off + pk.pts.length - 6), i: bi, done: false, doneT: 0, fins: 0, place: 0, winner: '', t: 0, lostT: 0 };
+  pickTarget(); updateHud();
+  popText('GO!'); tone(880, 0, 0.5, 'square', 0.07);
+  toast('STREET RACE', pk.name, 'First to the green beam, about 900 m down the road. Press 3 to drop out.', 4.5);
+}
+function endRoadRace(quit) {
+  roadRace = null; syncNpcs(); pickTarget(); updateHud();
+  if (quit) toast('DROPPED OUT', 'Out of the street race', 'Pull up alongside any pack and press 3 to race them.', 3);
+}
+function updateRoadRace(dt) {
+  const rr = roadRace, pk = rr.pack, L = pk.off + pk.pts.length - 1;
+  rr.t += dt;
+  if (rr.done) { if ((rr.doneT -= dt) <= 0) endRoadRace(false); return; }
+  let bi = rr.i, bd = 1e9;      // how far along the route the truck has got; cutting a corner is fair, wandering off is not
+  for (let k = -20; k <= 60; k++) { const j = clamp(rr.i + k, pk.off, L), p = pkPt(pk, j), dx = p[0] - car.x, dz = p[1] - car.z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = j; } }
+  rr.i = bi;
+  if (bd > 2500) { if ((rr.lostT += dt) > 4) { endRoadRace(false); toast('OFF THE ROUTE', 'Out of the street race', 'Stay near the road they are racing on.', 3); return; } } else rr.lostT = 0;
+  for (const c of pk.cars) if (!c.fin && c.a >= rr.goal) { c.fin = ++rr.fins; if (c.fin === 1) rr.winner = c.def.name; }
+  const g = pkPt(pk, rr.goal);
+  if (rr.i >= rr.goal - 2 || hyp(car.x - g[0], car.z - g[1]) < 10) {
+    rr.place = ++rr.fins; rr.done = true; rr.doneT = 7;
+    if (rr.place === 1) { toast('YOU WIN', pk.name + ' beaten', 'First to the line, ahead of all ' + pk.cars.length + '.', 6); popText('WINNER!'); [523, 659, 784, 1047, 1319].forEach((f, k) => tone(f, k * 0.1, 0.4)); }
+    else { toast('FINISHED P' + rr.place, pk.name, rr.winner + ' got there first.', 6); popText('P' + rr.place); [392, 330].forEach((f, k) => tone(f, k * 0.15, 0.35, 'square', 0.06)); }
+    for (let k = 0; k < 24; k++) puff(car.x + (Math.random() - .5) * 6, car.y + 2 + Math.random() * 3, car.z + (Math.random() - .5) * 6, CROWD[k % CROWD.length], 0.4, 5, 0.8);
   }
 }
 
@@ -2752,7 +3357,8 @@ function explodeGlitter(b, wet) {      // not a bang so much as a makeover
   if (b.mine) popText(SLAY[Math.floor(Math.random() * SLAY.length)]);
   if (d < 12 && !car.fly) { car.pop = Math.max(car.pop, 5); car.rv += (Math.random() - .5) * 5; if (!b.mine) popText('YOU GOT GLITTERED'); }
   for (const a of animals) if (hyp(a.x - b.x, a.z - b.z) < 13 && Math.abs(a.y - b.y) < 9) a.glam = true;
-  for (const o of boatsAct) { const [bx, , bz] = orbitPos(o, Date.now() / 1000, o.w); if (hyp(bx - b.x, bz - b.z) < 15 && b.y < WATER + 8) o.glam = true; }
+  for (const o of boatsAct) { const [bx, , bz] = vesselPose(o, Date.now() / 1000); if (hyp(bx - b.x, bz - b.z) < 15 && b.y < WATER + 8) o.glam = true; }
+  for (const r of allRacers()) if (hyp(r.x - b.x, r.z - b.z) < 13) { r.glam = true; r.spinT = 1.4; }
   if (guestMode()) return;      // the host decides who was standing in it
   for (const n of npcs) if (n.alive && !(n.glam > 0) && hyp(n.x - b.x, n.z - b.z) < 12 && Math.abs(n.y - b.y) < 9) {
     if (n.type === 'rival') { n.hookSlow = 3.5; n.v = 0; popText('THIEF YASSIFIED'); continue; }
@@ -3157,8 +3763,21 @@ function render(time) {
     for (const o of boatsAct) {
       const [bx, , bz, yaw] = orbitPos(o, now, o.w);
       if (Math.hypot(bx - cam.eye[0], bz - cam.eye[2]) > maxD + 30) continue;
-      draw(boatMesh[o.v], mulN(T(bx, WATER + 0.1 + Math.sin(time * 1.7 + o.ph) * 0.12, bz), RY(yaw), RZ(Math.sin(time * 1.3 + o.ph) * 0.06 - (o.v === 2 ? 0.14 * o.dir : 0)), RX(Math.sin(time * 1.1 + o.ph) * 0.04 - (o.v === 2 ? 0.1 : 0)), Sc(1.8, 1.8, 1.8)), o.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined);
+      const [, vy, , , vp, vr, sub] = vesselPose(o, now), V = VESSEL[o.v];
+      if (o.v === 5 && sub > 0.97) continue;      // a whale gone deep
+      draw(vesselMesh[o.v], mulN(T(bx, vy, bz), RY(yaw + (o.v === 6 ? Math.sin(now * 5 + o.ph) * 0.12 : 0)), RZ(vr), RX(vp), Sc(V.sc, V.sc, V.sc)), o.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined);
     }
+  }
+  for (const b of balls) draw(cubeMesh, mul(T(b.x, b.y, b.z), Sc(.55, .55, .55)), { tint: [.12, .12, .13] });
+  for (const r of allRacers()) {      // the racing cars, on the track and on the roads
+    if (Math.hypot(r.x - cam.eye[0], r.z - cam.eye[2]) > maxD) continue;
+    const m = mulN(T(r.x, r.y, r.z), RY(r.h)), ws = r.ws || .66;
+    draw(r.mesh, m, r.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined);
+    for (const [lx, lz] of r.wh || RWHEELS) draw(carMesh.wheel, mulN(m, T(lx, ws * .6, lz), RX(r.spin), Sc(ws, ws, ws)));
+  }
+  if (trackRace && trackRace.cd > -1.5) {      // the start lights, one more each beat, then all out for the go
+    const t = trackOf(trackRace.st), [sx, sz] = t.pts[0], [tx, tz] = t.tan0, [nx, nz] = t.on, ly = top(Math.floor(sx), Math.floor(sz)) + 6.1, lit = trackRace.cd > 0 ? Math.min(5, Math.floor((3.4 - trackRace.cd) / 0.6)) : 0;
+    for (let k = 0; k < 5; k++) { const q = (k - 2) * 1.5; draw(cubeMesh, mul(T(sx + nx * q - tx * 0.7, ly, sz + nz * q - tz * 0.7), Sc(.8, .8, .8)), { emis: 1, tint: k < lit ? [1, .1, .08] : [.15, .05, .05] }); }
   }
   for (const b of bombs) draw(bombMesh, mulN(T(b.x, b.y, b.z), RY(Math.atan2(b.vx, b.vz)), RX(Math.atan2(-b.vy, hyp(b.vx, b.vz) + 0.01))), { emis: 0.35 });
   // the sky: seen from a long way off
@@ -3203,9 +3822,19 @@ function render(time) {
     draw(cubeMesh, mul(T(lx, ly, lz), Sc(fs, fs, fs)), { emis: 1, fogMode: 1, fog: [520, 900], tint: [night, .93 * night, .72 * night] });
     if (dist < 280) draw(beamMesh, mulN(T(lx, ly, lz), RY(n.h), RX(Math.PI / 2 - 0.05), Sc(1.9, 0.36, 1.9)), { emis: 1, fogMode: 1, fog: [210, 300], tint: [.34 * night, .31 * night, .22 * night] });
   }
+  if (night > 0.05) for (const L of lightsAct) if (!L.off && Math.hypot(L.x - cam.eye[0], L.z - cam.eye[2]) < 760) {      // lighthouse beams, sweeping round
+    const lx = L.x - 0.5, lz = L.z - 0.5, ly = L.y + 19.7, a = time * 0.8 + L.x * 0.013;
+    for (const sw of [0, Math.PI]) draw(beamMesh, mulN(T(lx, ly, lz), RY(a + sw), RX(Math.PI / 2), Sc(1.7, 0.8, 1.7)), { emis: 1, fogMode: 1, fog: [520, 900], tint: [.42 * night, .38 * night, .24 * night] });
+    draw(cubeMesh, mul(T(lx, ly, lz), Sc(3.2, 3.2, 3.2)), { emis: 1, fogMode: 1, fog: [650, 1100], tint: [night, .88 * night, .55 * night] });
+  }
   for (const n of npcs) if (n.alive && n.type === 'hunter') {      // a hunter's light shows long before the truck does
     const c = n.mode === 'chase' ? [1, .12, .08] : n.mode === 'search' ? [1, .6, .1] : [.6, .1, .1];
     draw(beamMesh, mul(T(n.x, n.y + 2.6, n.z), Sc(0.5, 0.4, 0.5)), { emis: 1, fogMode: 1, fog: [330, 600], tint: c });
+  }
+  if (roadRace) {     // the street race finish: a green beam across the road
+    const g = pkPt(roadRace.pack, roadRace.goal), gy = groundAt(g[0], g[1]), gp = 0.55 + 0.2 * Math.sin(time * 5);
+    draw(beamMesh, mul(T(g[0], gy, g[1]), Sc(3.4, 1.6, 3.4)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, 1 * gp, .5 * gp] });
+    draw(beamMesh, mul(T(g[0], gy, g[1]), Sc(11, 0.05, 11)), { emis: 1, fogMode: 1, fog: [500, 900], tint: [.1 * gp, .9 * gp, .45 * gp] });
   }
   if (race) {     // the race waypoint: a fat green beam you can see from across the island
     const cp = race.cp, gp = 0.55 + 0.2 * Math.sin(time * 5);
@@ -3239,10 +3868,11 @@ function tick(dt, now, drawIt = true) {
       const rx = Math.floor(car.x) >> RSH, rz = Math.floor(car.z) >> RSH;
       search: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (!roadTiles.has(rkey(rx + dx, rz + dz))) { tileAt(rx + dx, rz + dz); break search; }
     }
+    if (trackRace && trackRace.cd > 0) car.vx = car.vz = 0;      // held on the grid until the lights go out
     updateCar(dt / 2); updateCar(dt / 2);
     playTime += dt; tod = (tod + dt / 540) % 1;
     saveT -= dt; if (saveT <= 0) { saveT = 5; doSave(); }
-    updateNpcs(dt); updateAnimals(dt); updateBoats(dt); updateRace(dt); skyTick(dt); updateBombs(dt);
+    updateNpcs(dt); updateAnimals(dt); updateBoats(dt); updateRacers(dt); updatePacks(dt); updateRace(dt); skyTick(dt); updateBombs(dt);
     if (dirty.size) {     // re-mesh chunks that just lost a tree
       for (const k of dirty) { const c = chunks.get(k); if (c) { freeMesh(c.mesh); freeMesh(c.water); chunks.set(k, buildChunk(c.cx, c.cz)); } }
       dirty.clear();
@@ -3273,6 +3903,9 @@ function tick(dt, now, drawIt = true) {
     const t = AC.currentTime, sp = Math.abs(car.vF), on = state === 'play' && !muted, thr = keys.up || keys.down ? 1 : 0;
     const f0 = 38 + sp * 3.2 + thr * 10;
     eng.o.frequency.setTargetAtTime(f0, t, 0.06); eng.o2.frequency.setTargetAtTime(f0 * 0.5, t, 0.06);
+    let rd = 1e9, rv = 0;
+    for (const r of allRacers()) { const d = Math.hypot(r.x - car.x, r.z - car.z); if (d < rd) { rd = d; rv = r.v; } }
+    eng.ro.frequency.setTargetAtTime(70 + rv * 7, t, 0.08); eng.rg.gain.setTargetAtTime(on && rd < 120 ? 0.035 * (1 - rd / 120) ** 2 : 0, t, 0.15);
     eng.f.frequency.setTargetAtTime(240 + sp * 22, t, 0.1); eng.g.gain.setTargetAtTime(on ? 0.028 + thr * 0.02 + sp * 0.0005 : 0, t, 0.1);
   }
 }
@@ -3280,7 +3913,7 @@ requestAnimationFrame(frame);
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the world…', '', 60); });
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
-window.__game = { alpsMask, get mt() { return [mtGap, mtTrail]; }, animals, get boats() { return boatsAct; }, herdsOf, boatsOf, orbitPos, canyonMask, massif, car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+window.__game = { packs, get roadRace() { return roadRace; }, joinRoadRace, spawnPack, nearPack, pkPt, get racers() { return racers; }, get trackRace() { return trackRace; }, trackOf, startTrackRace, nearTrack, lighthousesOf, get lights() { return lightsAct; }, vesselPose, balls, VESSEL, alpsMask, get mt() { return [mtGap, mtTrail]; }, animals, get boats() { return boatsAct; }, herdsOf, boatsOf, orbitPos, canyonMask, massif, car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
 })();
 </script>
 </body>
