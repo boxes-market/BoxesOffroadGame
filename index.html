@@ -95,7 +95,7 @@
   </div>
   <div id="speed" class="panel"><b id="spd">0</b><small>km/h</small><div id="biome"></div><div id="hookT" style="font-size:12px;opacity:.78"></div></div>
   <div id="miniWrap" class="panel"><canvas id="mini" width="180" height="180"></canvas></div>
-  <div id="help">WASD drive · Space handbrake · Shift boost · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
+  <div id="help">WASD drive · Space handbrake · Shift boost · B wings · F hook · E hop (in the air: A/D spin, Space+W/S flip) · T waypoint · 1 thieves · 2 hunters · 3 race · J journal · M map · C camera · R recover · H horn · V mute</div>
   <div id="stealth"></div>
   <div id="toast" class="panel"></div>
   <div id="pop"></div>
@@ -108,6 +108,7 @@
   <button data-k="up" style="right:18px">▲</button>
   <button data-k="hop" style="right:57px; bottom:286px">⤒</button>
   <button id="tHook" style="left:57px; bottom:286px; font-size:12px">HOOK</button>
+  <button id="tWing" style="left:57px; bottom:360px; font-size:12px">WING</button>
 </div>
 
 <div id="ovStart" class="ov on"><div class="card panel">
@@ -120,6 +121,7 @@
     <span>Space</span><span>Handbrake (drift)</span>
     <span>Shift</span><span>Boost — fast enough and you plough through trees and bounce over rocks</span>
     <span>E</span><span>Hop. In the air, A / D spins, and Space with W / S flips. Red mushrooms are trampolines.</span>
+    <span>B</span><span>Wings. Glide and fly: S pulls up, W dives, A / D bank into a turn, Shift is a push, Space is the airbrake. B again folds them.</span>
     <span>F / click</span><span>Grappling hook. Hit a thief to reel it in or a hunter to stun it. Miss, and it drags you to wherever it lands.</span>
     <span>T</span><span>Switch to the next waypoint</span>
     <span>J · M</span><span>Journal of places to find · map of everywhere you have been</span>
@@ -1053,6 +1055,17 @@ const makeTruck = body => {
 const carMesh = makeTruck([.93, .36, .12]), friendMesh = makeTruck([.16, .46, .92]);
 const WHEELS = [[1.05, 1.45], [-1.05, 1.45], [1.05, -1.45], [-1.05, -1.45]];
 const crateMesh = (() => { const m = new MB(); m.box(-.5, -.5, -.5, .5, .5, .5, C.card); m.box(-.52, -.08, -.52, .52, .08, .52, C.cream); m.box(-.08, -.52, -.52, .08, .52, .52, C.cream); return makeMesh(m); })();
+const wingMesh = (() => {      // one wing, root at the origin, reaching out along +X; the other side is the same mesh mirrored
+  const m = new MB(); m.lo = 0.94;
+  for (let i = 0; i < 6; i++) {
+    const x0 = i * 0.85, c0 = -1.25 + i * 0.1, c1 = 0.95 - i * 0.2;
+    m.box(x0, 0, c0, x0 + 0.85, 0.16, c1, i % 2 ? [.95, .92, .84] : [.93, .36, .12]);
+    m.box(x0 + 0.1, -0.04, c0 - 0.55 + i * 0.05, x0 + 0.75, 0.1, c0 + 0.05, [.98, .97, .92]);      // trailing feathers
+  }
+  m.box(5.1, 0, -0.5, 5.5, 0.6, 0.2, [.93, .36, .12]);      // upturned tip
+  return makeMesh(m);
+})();
+const tailMesh = (() => { const m = new MB(); m.lo = 0.94; m.box(-1.5, 2.3, -2.5, 1.5, 2.42, -1.7, [.95, .92, .84]); m.box(-0.07, 2.42, -2.5, 0.07, 3.3, -1.75, [.93, .36, .12]); return makeMesh(m); })();
 const cubeMesh = (() => { const m = new MB(); m.lo = 1; m.box(-.5, -.5, -.5, .5, .5, .5, [1, 1, 1]); return makeMesh(m); })();
 const shadowMesh = (() => { const m = new MB(); m.quad(-1.25, 0, -2.5, -1.25, 0, 2.5, 1.25, 0, 2.5, 1.25, 0, -2.5, 1, 1, 1, 2); return makeMesh(m); })();
 const beamMesh = (() => {
@@ -1136,10 +1149,11 @@ function reveal(x, z) {
 const MAXV = 27, BOOSTV = 38, ACC = 20, GRAV = 26, SLOPE = 10.5;
 const TOPV = ACC * 1.3 / (ACC * 1.3 / BOOSTV + 0.12);     // what the truck actually tops out at on the flat with boost held (about 32)
 const car = { x: spawn.x, z: spawn.z, y: 0, vy: 0, h: spawn.h, vx: 0, vz: 0, pitch: 0, roll: 0, steer: 0, spin: 0, g: 0, hs: 0, air: 0, biome: GRASS, vF: 0,
-  pop: 0, sy: 0, sv: 0, pv: 0, rv: 0, gp: 0, gr: 0, flip: 0, yawAcc: 0, mb: 0 };
+  pop: 0, sy: 0, sv: 0, pv: 0, rv: 0, gp: 0, gr: 0, flip: 0, yawAcc: 0, mb: 0,
+  fly: false, wing: 0, fp: 0, fb: 0 };      // wings out, how far unfolded, and the nose and bank angles in flight
 let lastSafe = { x: spawn.x, z: spawn.z, h: spawn.h }, safeT = 0;
 let state = 'start', playTime = 0, tod = 0.2, odo = 0, won = false, pinned = null, target = null;
-let camYaw = spawn.h + 2.4, camY = 0, lookY = 0, camMode = 0, muted = false;
+let camYaw = spawn.h + 2.4, camY = 0, lookY = 0, camMode = 0, muted = false, camRoll = 0, camBack = 0;
 const CAMS = [[12, 5.2], [8, 3.4], [21, 11]];
 const keys = { up: false, down: false, left: false, right: false, brake: false, boost: false, hop: false };
 let caught = 0, wrecked = 0, rammed = 0, shaken = 0;
@@ -1181,7 +1195,7 @@ if (save) {
   playTime = save.time || 0; tod = save.tod ?? 0.2; odo = save.odo || 0; won = !!save.won; smashed = save.smashed || 0;
   caught = save.caught || 0; wrecked = save.wrecked || 0; rammed = save.rammed || 0; shaken = save.shaken || 0;
 }
-function settle() { car.g = car.y = groundAt(car.x, car.z); { const fx = Math.sin(car.h), fz = Math.cos(car.h); car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4; } car.vy = car.pop = car.sy = car.sv = car.flip = car.yawAcc = 0; airT = 0; camY = car.y + 5; lookY = car.y; }
+function settle() { car.g = car.y = groundAt(car.x, car.z); { const fx = Math.sin(car.h), fz = Math.cos(car.h); car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4; } car.vy = car.pop = car.sy = car.sv = car.flip = car.yawAcc = 0; car.fly = false; airT = 0; camY = car.y + 5; lookY = car.y; }
 settle(); refreshActive(true);
 function doSave() {
   if (NOSAVE) return;
@@ -1302,7 +1316,7 @@ function updateHud() {
   el.npc.innerHTML = (opts.thieves ? `<b>${caught}</b> thieves caught<br>` : '') + (opts.hunters ? `<b>${wrecked}</b> hunters wrecked · <b>${shaken}</b> lost · <b>${rammed}</b> hits taken` : '');
   el.hook.textContent = hook ? 'Hook out' : hookCd > 0 ? 'Hook ready in ' + Math.ceil(hookCd) + ' s' : 'Hook ready';
   el.friend.textContent = ROOM ? (remote.alive ? 'Friend: ' + whereText(remote) : NET.status) : '';
-  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.road && car.biome !== CITY ? 'Road' : BIOME_NAME[car.biome];
+  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.fly ? 'Gliding · ' + Math.max(0, Math.round(car.air)) + ' m up' : car.road && car.biome !== CITY ? 'Road' : BIOME_NAME[car.biome];
   if (race) {
     const cp = race.cp, dx = cp.x - car.x, dz = cp.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
     el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
@@ -1397,6 +1411,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyR') { recover(); toast('RECOVERED', 'Back on solid ground', '', 2); }
   else if (e.code === 'KeyT') cycleTarget();
   else if (e.code === 'KeyF') fireHook();
+  else if (e.code === 'KeyB') toggleFly();
   else if (e.code === 'KeyH') { tone(392, 0, 0.35, 'square', 0.07); tone(494, 0, 0.35, 'square', 0.07); }
   else if (e.code === 'Digit1') { setOpt('thieves', !opts.thieves); toast('PARCEL THIEVES', opts.thieves ? 'On the loose' : 'Off', opts.thieves ? 'Yellow buggies. Run them down to get the parcel back.' : '', 2.5); }
   else if (e.code === 'Digit2') { setOpt('hunters', !opts.hunters); toast('HUNTER TRUCKS', opts.hunters ? 'Coming for you' : 'Off', opts.hunters ? 'Outrun them, or hit them harder than they hit you.' : '', 2.5); }
@@ -1517,6 +1532,8 @@ function landTricks() {
 }
 let dustT = 0, biomeT = 0;
 function updateCar(dt) {
+  if (car.fly) { flyStep(dt); senseWorld(); return; }
+  if (car.wing > 0) car.wing = Math.max(0, car.wing - dt * 4);      // wings fold away once back on the wheels
   const thr = (keys.up ? 1 : 0) - (keys.down ? 1 : 0), st = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
   car.steer += (st - car.steer) * Math.min(1, dt * 7);
   const b = car.biome, ctrl = car.air < 0.45, inWater = car.g < WATER - 0.05, pvF = car.vF;
@@ -1617,7 +1634,9 @@ function updateCar(dt) {
     if (inWater) puff(wx, WATER + .1, wz, DUST[6], 0.45, 3.5); else puff(wx, car.y + .2, wz, car.road ? [.62, .56, .47] : DUST[b], 0.3 + Math.random() * .3, 0.8);
   }
   if (keys.boost && thr > 0 && ctrl && Math.random() < dt * 45) puff(car.x - fx * 2.5, car.y + 0.95, car.z - fz * 2.5, [1, .5 + Math.random() * .35, .12], 0.32, 0.4, 1);
-  // discoveries
+  senseWorld();
+}
+function senseWorld() {      // what the truck uncovers and picks up, however it is travelling
   reveal(car.x, car.z);
   for (const l of landmarks) if (!l.found && Math.hypot(l.x - car.x, l.z - car.z) < (l.kind === 'city' ? l.pad - 12 : l.pad + 5)) {
     const fresh = ![...foundSites.values()].includes(l.def.id);
@@ -1629,6 +1648,80 @@ function updateCar(dt) {
   for (const c of crates) if (!c.got && Math.abs(c.x - car.x) < 3 && Math.abs(c.z - car.z) < 3 && Math.abs(c.y - car.y) < 4) {
     c.got = true; gotCrates.add(c.id); sfxCrate(); netSend({ t: 'cr', id: c.id });
     toast('LOST PARCEL RECOVERED', gotCrates.size + ' so far', '', 2.2);
+  }
+}
+
+// Wings. B unfolds them; the truck becomes a glider that trades height for speed and back again.
+function toggleFly() {
+  if (state !== 'play') return;
+  if (car.fly) { car.fly = false; popText('WINGS IN'); tone(520, 0, 0.12, 'sine', 0.06); tone(340, 0.08, 0.18, 'sine', 0.06); return; }
+  const sp = Math.hypot(car.vx, car.vz);
+  car.fly = true; car.fb = 0; car.flip = 0; car.yawAcc = 0; car.pop = 0; airT = 0;
+  if (car.air < 1.2) {       // from the ground: a running leap into the air
+    const v = Math.max(sp, 17); car.vx = Math.sin(car.h) * v; car.vz = Math.cos(car.h) * v; car.vy = 12; car.y += 0.5; car.fp = 0.34;
+    for (let i = 0; i < 10; i++) puff(car.x + (Math.random() - .5) * 3, car.y + .2, car.z + (Math.random() - .5) * 3, DUST[car.biome], 0.5, 2);
+  } else car.fp = clamp(Math.atan2(car.vy, sp + 1), -0.6, 0.5);
+  if (hook && hook.phase === 'pull') releaseHook();
+  popText('WINGS OUT'); [392, 523, 659, 784].forEach((f, i) => tone(f, i * 0.06, 0.35, 'sine', 0.07));
+}
+let trailT = 0;
+function flyStep(dt) {
+  const thr = (keys.up ? 1 : 0) - (keys.down ? 1 : 0), st = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
+  car.steer += (st - car.steer) * Math.min(1, dt * 5);
+  car.wing = Math.min(1, car.wing + dt * 3.5);
+  let V = Math.hypot(car.vx, car.vy, car.vz) || 0.01;
+  // the nose and the bank ease towards what is asked of them; nothing snaps
+  const auth = clamp(V / 16, 0.3, 1);        // more air over the wings, more say over where it goes
+  car.fb += (st * 0.98 - car.fb) * Math.min(1, dt * 3);
+  let wantP = -thr * 0.62 - 0.07;             // W noses down, S pulls up; hands off, it settles into a long shallow glide
+  if (V < 11) wantP = Math.min(wantP, -0.3 - (11 - V) * 0.06);        // too slow to fly: the nose drops until it picks up speed again
+  car.fp += (wantP - car.fp) * Math.min(1, dt * 2.3);
+  car.h += Math.sin(car.fb) * 1.3 * auth * dt;         // a banked wing turns the truck
+  // the path through the air swings round to follow the nose
+  const cp = Math.cos(car.fp), fx = Math.sin(car.h), fz = Math.cos(car.h), k = Math.min(1, dt * 3.6 * auth);
+  let dx = car.vx / V, dy = car.vy / V, dz = car.vz / V;
+  dx += (fx * cp - dx) * k; dy += (Math.sin(car.fp) - dy) * k; dz += (fz * cp - dz) * k;
+  const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+  // height buys speed and climbing spends it; the air takes a little all the time; Shift is a push and Space is the airbrake
+  V += (-dy * 17 - (0.3 + 0.0014 * V * V) - Math.abs(car.fb) * 1.0 + (keys.boost ? 9 : 0) - (keys.brake ? 13 : 0)) * dt;
+  V = clamp(V, 5, 64);
+  const px = car.x, pz = car.z;
+  car.vx = dx * V; car.vy = dy * V; car.vz = dz * V;
+  car.x += car.vx * dt; car.y += car.vy * dt; car.z += car.vz * dt;
+  odo += Math.hypot(car.x - px, car.z - pz);
+  // the look of it: body follows the flight, springs settle, wheels idle
+  car.pitch = car.gp = car.fp; car.roll = car.gr = -car.fb; car.sy += (0 - car.sy) * Math.min(1, dt * 6); car.sv = car.pv = car.rv = 0;
+  car.vF = V; car.spin += 6 * dt;
+  car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4;
+  const g = Math.max(groundAt(car.x, car.z), WATER - 0.4); car.g = g; car.air = car.y - g;
+  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); car.road = false; }
+  // things too tall to fly through: buildings and landmarks
+  let hit = null;
+  const ccx = Math.floor(car.x / CH), ccz = Math.floor(car.z / CH);
+  for (let cz = -1; cz <= 1 && !hit; cz++) for (let cx = -1; cx <= 1 && !hit; cx++) {
+    const c = chunks.get(ckey(ccx + cx, ccz + cz));
+    if (c) for (const o of c.obs) if (o.kind === 'bldg' && car.y < o.top + 0.4 && car.x > o.x0 - 1.2 && car.x < o.x1 + 1.2 && car.z > o.z0 - 1.2 && car.z < o.z1 + 1.2) { hit = [o.x, o.z]; break; }
+  }
+  if (!hit) for (const o of lmObs) if (car.y < o.y + 11 && Math.hypot(o.x - car.x, o.z - car.z) < o.r + 1.2) { hit = [o.x, o.z]; break; }
+  if (hit) {       // into a wall: wings fold and it drops
+    const nx = car.x - hit[0], nz = car.z - hit[1], nl = Math.hypot(nx, nz) || 1;
+    car.x = px + nx / nl * 0.6; car.z = pz + nz / nl * 0.6; car.vx = nx / nl * 7; car.vz = nz / nl * 7; car.vy = Math.min(car.vy, 2);
+    car.fly = false; shake = Math.max(shake, 0.6); sfxThump(); sfxCrunch(); popText('CRUNCH');
+    return;
+  }
+  // touching down folds the wings; the wheels take it from there
+  if (car.y <= g + 0.3 && car.vy <= 0) {       // only on the way down, so a take-off from a dip or the shallows gets away
+    car.fly = false; car.y = Math.max(car.y, g);
+    if (g <= WATER) { car.vx *= 0.3; car.vz *= 0.3; }
+    else if (car.vy > -9) popText('SMOOTH LANDING');
+    return;
+  }
+  // a thread of air off each wingtip
+  trailT -= dt;
+  if (trailT <= 0 && V > 14) {
+    trailT = 0.03;
+    for (const sgn of [1, -1]) { const lx = sgn * 5.2 * Math.cos(car.fb), ly = 2.1 - sgn * 5.2 * Math.sin(car.fb); parts.push({ x: car.x + fz * lx - fx * 0.4, y: car.y + ly, z: car.z - fx * lx - fz * 0.4, vx: 0, vy: 0.3, vz: 0, life: 0.55, t: 0, size: 0.16, col: [1, 1, 1], em: 0.7 }); }
+    if (parts.length > 170) parts.splice(0, parts.length - 170);
   }
 }
 
@@ -1950,6 +2043,7 @@ function updateHook(dt) {
 }
 canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button === 0) fireHook(); });
 $('tHook').addEventListener('pointerdown', e => { e.preventDefault(); fireHook(); });
+$('tWing').addEventListener('pointerdown', e => { e.preventDefault(); toggleFly(); });
 
 // ───────────────────────── race mode ─────────────────────────
 function relocate(n) {     // the rival got stuck or swamped: winch it to dry land nearby, pointed at the waypoint
@@ -2154,7 +2248,7 @@ function netPump() {      // runs on a timer, not the frame loop, so a player wh
   if (!NET.dc || NET.dc.readyState !== 'open') return;
   if (now - NET.lastRx > 15000) { netGone(); return; }      // nothing heard for a quarter of a minute: they are gone
   const r = v => Math.round(v * 100) / 100;
-  const m = { t: 's', p: [r(car.x), r(car.y), r(car.z), r(car.h), r(car.pitch), r(car.roll), r(car.flip), r(car.steer), r(car.sy), r(state === 'play' ? car.vF : 0)], k: hook ? [r(hook.x), r(hook.y), r(hook.z)] : 0,
+  const m = { t: 's', p: [r(car.x), r(car.y), r(car.z), r(car.h), r(car.pitch), r(car.roll), r(car.flip), r(car.steer), r(car.sy), r(state === 'play' ? car.vF : 0), car.fly ? 1 : 0], k: hook ? [r(hook.x), r(hook.y), r(hook.z)] : 0,
     c: inCover() ? 1 : 0 };
   if (NET.host) {      // the host's clock sets the time of day for both, and its thieves and hunters are the ones both players see
     m.d = Math.round(tod * 1e4) / 1e4;
@@ -2170,7 +2264,7 @@ function netTick(dt) {      // every frame: ease the friend's truck (and, for th
   if (Math.hypot(t[0] - remote.x, t[2] - remote.z) > 40) { remote.x = t[0]; remote.y = t[1]; remote.z = t[2]; }
   remote.x += (t[0] - remote.x) * k; remote.y += (t[1] - remote.y) * k; remote.z += (t[2] - remote.z) * k; remote.h += angDiff(t[3], remote.h) * k;
   remote.pitch += (t[4] - remote.pitch) * k; remote.roll += (t[5] - remote.roll) * k; remote.flip = Math.abs(t[6] - remote.flip) > 3 ? t[6] : remote.flip + (t[6] - remote.flip) * k;
-  remote.steer = t[7]; remote.sy = t[8]; remote.v = t[9]; remote.spin += t[9] / 0.6 * dt;
+  remote.steer = t[7]; remote.sy = t[8]; remote.v = t[9]; remote.spin += t[9] / 0.6 * dt; remote.fly = !!t[10];
   if (guestMode()) for (const n of npcs) if (n.t) {
     const a = n.t; a[2] += Math.sin(a[5]) * a[11] * dt; a[4] += Math.cos(a[5]) * a[11] * dt;
     n.x += (a[2] - n.x) * k; n.y += (a[3] - n.y) * k; n.z += (a[4] - n.z) * k; n.h += angDiff(a[5], n.h) * k; n.pitch += (a[6] - n.pitch) * k; n.roll += (a[7] - n.roll) * k; n.spin += a[11] / 0.5 * dt;
@@ -2223,10 +2317,12 @@ function draw(mesh, model, o) { if (!mesh) return; setDraw(model, o); gl.bindVer
 const FOG = [RD * CH * 0.5, RD * CH - 12];
 let cam = { eye: [0, 0, 0], tgt: [0, 0, 0] };
 function updateCamera(dt) {
-  if (state === 'start') camYaw += dt * 0.12; else camYaw += angDiff(car.h, camYaw) * Math.min(1, dt * 3.6);
-  const [cd, chh] = CAMS[camMode];
+  if (state === 'start') camYaw += dt * 0.12; else camYaw += angDiff(car.h, camYaw) * Math.min(1, dt * (car.fly ? 2.8 : 3.6));
+  camBack += ((car.fly ? 1 : 0) - camBack) * Math.min(1, dt * 2.5); camRoll += ((car.fly ? car.fb * 0.3 : 0) - camRoll) * Math.min(1, dt * 3);
+  const cd = CAMS[camMode][0] + camBack * 7, chh = CAMS[camMode][1] + camBack * (1.5 - car.fp * 7);
   const ex = car.x - Math.sin(camYaw) * cd, ez = car.z - Math.cos(camYaw) * cd;
   let want = Math.max(car.y + chh, groundAt(ex, ez) + 1.8, WATER + 1.3);
+  if (car.fly) { camY += (want - camY) * Math.min(1, dt * 3.5); lookY += (car.y - lookY) * Math.min(1, dt * 12); }      // in flight the camera keeps closer step with the climb and dive
   for (let t = 0.3; t < 0.95; t += 0.2) {
     const need = car.y + 1.8 + (groundAt(lerp(car.x, ex, t), lerp(car.z, ez, t)) + 1.2 - car.y - 1.8) / t;
     if (need > want) want = Math.min(need, car.y + chh + 14);
@@ -2240,9 +2336,10 @@ function render(time) {
   const w = canvas.width, h = canvas.height, asp = w / h, sk = skyState(tod);
   gl.viewport(0, 0, w, h); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
   dayLight = sk.day;
-  const fov = (60 + 9 * clamp(Math.abs(car.vF) / BOOSTV, 0, 1)) * Math.PI / 180;
-  const view = lookAt(cam.eye, cam.tgt, [0, 1, 0]), VP = mul(persp(fov, asp, 0.3, 1400), view);
-  const F = norm3([cam.tgt[0] - cam.eye[0], cam.tgt[1] - cam.eye[1], cam.tgt[2] - cam.eye[2]]), Rv = norm3(cross(F, [0, 1, 0])), Uv = cross(Rv, F);
+  const fov = (60 + 9 * clamp(Math.abs(car.vF) / BOOSTV, 0, 1) + camBack * 6 * clamp(car.vF / 50, 0, 1)) * Math.PI / 180;
+  const upv = [Math.cos(camYaw) * Math.sin(camRoll), Math.cos(camRoll), -Math.sin(camYaw) * Math.sin(camRoll)];      // level, except when banking in flight
+  const view = lookAt(cam.eye, cam.tgt, upv), VP = mul(persp(fov, asp, 0.3, 1400), view);
+  const F = norm3([cam.tgt[0] - cam.eye[0], cam.tgt[1] - cam.eye[1], cam.tgt[2] - cam.eye[2]]), Rv = norm3(cross(F, upv)), Uv = cross(Rv, F);
   // sky
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.useProgram(SKY.p);
   const s = SKY.u, th = Math.tan(fov / 2);
@@ -2276,6 +2373,11 @@ function render(time) {
   // truck
   const base = mulN(T(car.x, car.y, car.z), RY(car.h), car.flip ? mulN(T(0, 1.3, 0), RX(car.flip), T(0, -1.3, 0)) : ID);
   const cm = mulN(base, T(0, car.sy, 0), RX(-car.pitch), RZ(car.roll)), wm = mulN(base, RX(-car.gp), RZ(car.gr));
+  const wings = (bm, w, push) => {      // unfolded by w, with a slow beat and a quicker one under power
+    const flap = Math.sin(time * 2.1) * 0.06 + (push ? Math.sin(time * 10) * 0.2 : 0) + 0.07;
+    draw(wingMesh, mulN(bm, T(0.95, 2.05, 0.1), RZ(flap), Sc(w, 1, 1))); draw(wingMesh, mulN(bm, T(-0.95, 2.05, 0.1), RZ(-flap), Sc(-w, 1, 1))); draw(tailMesh, mul(bm, Sc(w, 1, 1)));
+  };
+  if (car.wing > 0.01) wings(cm, car.wing, car.fly && keys.boost);
   draw(carMesh.body, cm); draw(carMesh.glow, cm, { emis: 1 });
   WHEELS.forEach(([lx, lz], i) => draw(carMesh.wheel, mulN(wm, T(lx, 0.6, lz), RY(i < 2 ? car.steer * 0.45 : 0), RX(car.spin))));
   if (hook) {     // the rope and the hook on the end of it
@@ -2287,6 +2389,7 @@ function render(time) {
   if (remote.alive && Math.hypot(remote.x - cam.eye[0], remote.z - cam.eye[2]) < maxD + 40) {      // your friend's truck, in blue
     const fb = mulN(T(remote.x, remote.y, remote.z), RY(remote.h), remote.flip ? mulN(T(0, 1.3, 0), RX(remote.flip), T(0, -1.3, 0)) : ID), fm = mulN(fb, T(0, remote.sy, 0), RX(-remote.pitch), RZ(remote.roll));
     draw(friendMesh.body, fm); draw(friendMesh.glow, fm, { emis: 1 });
+    if (remote.fly) wings(fm, 1, false);
     WHEELS.forEach(([lx, lz], i) => draw(carMesh.wheel, mulN(fm, T(lx, 0.6, lz), RY(i < 2 ? remote.steer * 0.45 : 0), RX(remote.spin))));
     if (remote.hk) { draw(cubeMesh, segMat([remote.x, remote.y + 2.2, remote.z], remote.hk, 0.1), { tint: [.9, .85, .7], emis: 0.5 }); draw(cubeMesh, mulN(T(remote.hk[0], remote.hk[1], remote.hk[2]), Sc(.5, .5, .5)), { tint: [.3, .3, .36], emis: 0.3 }); }
     if (Math.hypot(remote.x - car.x, remote.z - car.z) > 18) draw(cubeMesh, mulN(T(remote.x, remote.y + 5.6 + Math.sin(time * 4) * 0.3, remote.z), RY(time * 2), RZ(0.785), RX(0.785), Sc(.6, .6, .6)), { emis: 1, tint: [.25, .6, 1] });
