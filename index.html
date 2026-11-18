@@ -247,17 +247,64 @@ function lookAt(e, c, u) {
 
 // ───────────────────────── world ─────────────────────────
 // The world has no edge. It is cut into regions, and everything in a region (its site, roads, parcels) is generated from the seed when first needed.
-const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 12;
-const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8;
-const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op'];
-const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32]];
-const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22]];
+const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 18, RW = 7.5;      // RW: half the width of a road
+const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9;
+const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon'];
+const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28]];
+const SIDEC = [[.5, .36, .24], [.44, .32, .22], [.78, .62, .38], [.62, .64, .7], [.8, .72, .5], [.45, .45, .48], [.5, .48, .4], [.38, .38, .41], [.4, .31, .22], [.7, .38, .24]];
 const DEEPC = [.42, .42, .45], LINEC = [.93, .9, .78], PARAC = [.6, .6, .62];
 const ROADC = TOPC.map((c, i) => mix3(c, i === SNOW ? [.74, .74, .78] : [.58, .52, .43], 0.8));
 let landmarks = [], crates = [], lmObs = [];      // the sites, parcels and landmark obstacles in the regions around the truck
 const rkey = (rx, rz) => (rx + 32768) * 65536 + (rz + 32768);
 const sites = new Map(), roadTiles = new Map(), edgeCache = new Map(), crateCache = new Map();
 
+// Canyon country, big mountains and cliff bands each come and go across the world. None of them reach the start, and there is always a canyon
+// to the west of it and a mountain to the north.
+function canyonMask(x, z) {
+  const sx = x - 256, sz = z - 256, d2 = sx * sx + sz * sz;
+  if (d2 < 144400) return 0;
+  const bx = x + 600, bump = 0.5 / (1 + (bx * bx + sz * sz) / 160000);
+  return smooth(0.57, 0.71, fbm(x / 620 + 77, z / 620 - 51, 14, 2) + bump) * smooth(380, 620, Math.sqrt(d2));
+}
+const MC = 1100;
+let mtGap = 0, mtTrail = false;      // set by massif(): how far inside one of the mountain's gullies this spot is, and whether it is on the middle of one
+function massif(x, z) {
+  mtGap = 0; mtTrail = false;      // the height a big mountain adds here. Each stands alone in its own square of the world: a broad cone with an uneven foot
+  const cx = Math.floor(x / MC), cz = Math.floor(z / MC);
+  if ((cz === 0 && (cx === 0 || cx === -1)) || (!(cx === 0 && cz === -1) && hash2(cx, cz, 941) > 0.34)) return 0;      // none at the start or in the canyon west of it; always one to the north
+  const H = 88 + hash2(cx, cz, 942) * 42, R = H * (2.7 + hash2(cx, cz, 943) * 0.5), room = MC - 2.5 * R - 20;
+  const dx = x - (cx + 0.5) * MC - (hash2(cx, cz, 944) - 0.5) * room, dz = z - (cz + 0.5) * MC - (hash2(cx, cz, 945) - 0.5) * room, d = hyp(dx, dz);
+  if (d > R * 1.12) return 0;
+  const dd = d * (0.9 + 0.2 * vnoise(x / 260 + 7, z / 260 - 3, 946)) / R;
+  if (dd >= 1) return 0;
+  // three gullies wind from the foot to the top with no cliffs in them, so there is always a way up for a truck that looks for it
+  const a0 = hash2(cx, cz, 947) * 6.2832;
+  let best = 1e9;
+  for (let i = 0; i < 3; i++) {
+    const an = a0 + i * 2.0944 + (hash2(cx + i, cz, 948) - 0.5) * 0.8, ux = Math.sin(an), uz = Math.cos(an), al = dx * ux + dz * uz;
+    if (al <= 0) continue;
+    const pp = Math.abs(dx * uz - dz * ux + (vnoise(al / 70, i * 9.3, 949) - 0.5) * 60 * smooth(0, 60, al));
+    if (pp < best) best = pp;
+  }
+  mtGap = Math.max(1 - smooth(10, 17, best), 1 - smooth(18, 36, d));
+  mtTrail = best < 2.6 && d > 30;
+  return H * smooth(1, 0, dd);
+}
+function canyonLand(x, z, whoops) {      // tablelands cut by deep gorges with a river along the bottom, and narrower slots off to the sides
+  const cr = 1 - Math.abs(fbm(x / 330 + 15, z / 330 - 28, 16, 2) * 2 - 1);
+  const sr = 1 - Math.abs(fbm(x / 190 - 44, z / 190 + 62, 17, 2) * 2 - 1);
+  const t = fbm(x / 210 + 5, z / 210 + 70, 18, 2) * 5, ti = Math.floor(t);
+  const M = 36 + 5 * (ti + smooth(0.2, 0.8, t - ti)) + (whoops - 0.5) * 1.6;      // table tops, in broad steps
+  const F = lerp(1.6, -0.9, smooth(0.955, 0.975, cr));      // the gorge floor, and the river down the middle of it
+  const q = (1 - smooth(0.8, 0.9, cr)) * 4, qi = Math.floor(q);
+  const wall = Math.min(1, (qi + smooth(0.55, 1, q - qi)) / 4);      // the walls go up in ledges
+  return F + (M - F) * Math.min(wall, 1 - 0.55 * smooth(0.84, 0.96, sr));
+}
+function crag(L, x, z, k) {      // cliff bands: level benches with a wall between each, broken here and there by a gap a truck can get up
+  const S = 7, w = fbm(x / 95 + 9, z / 95 - 33, 21, 2) * 9, t = (L + w) / S, ti = Math.floor(t);
+  const terr = (ti + smooth(0.955, 0.995, t - ti)) * S - w;
+  return lerp(L, lerp(terr, L, smooth(0.6, 0.72, vnoise(x / 48 + 3, z / 48 + 8, 22))), k);
+}
 function baseHeight(x, z) {      // the land before any road or town is built on it
   const cont = fbm(x / 950 + 3.3, z / 950 - 7.7, 11, 3) + 0.45 * Math.exp(-(x * x + z * z) / 1400000);     // continents and seas; always land around the start
   const fall = smooth(0.31, 0.45, cont);
@@ -267,12 +314,19 @@ function baseHeight(x, z) {      // the land before any road or town is built on
   const ridge = 1 - Math.abs(rn * 2 - 1);
   const mm = smooth(0.46, 0.64, fbm(x / 800 - 20, z / 800 + 31, 12, 2));      // mountain country comes and goes
   const whoops = fbm(x / 27 + 5, z / 27 - 9, 9, 2);
-  let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 + (whoops - 0.5) * 2.6 + ridge * ridge * mm * 42;
+  const cm = canyonMask(x, z), mt = cm < 1 ? massif(x, z) * (1 - cm) : 0;
+  let L = 6 + (e - 0.36) * 58 + (hills - 0.5) * 13 + (whoops - 0.5) * 2.6 + ridge * ridge * mm * 42 + mt * (0.9 + 0.2 * ridge);
   // winding valleys: dry canyons through the high ground, shallow fordable rivers through the low
   if (L > -0.9) {
     const vr = 1 - Math.abs(fbm(x / 300 - 60, z / 300 + 90, 8, 2) * 2 - 1);
-    L = Math.max(L - vr * vr * vr * 20, -0.9);
+    L = Math.max(L - vr * vr * vr * 20 * (1 - cm) * (1 - Math.min(1, mt / 40)), -0.9);
   }
+  if (cm < 1 && L > 6) {      // cliffs all over the big mountains, and on ordinary hills in patches
+    const sx = x - 256, sz = z - 256;
+    const k = Math.max(smooth(4, 26, mt), smooth(0.6, 0.7, fbm(x / 380 + 71, z / 380 + 19, 20, 2)) * smooth(260, 480, hyp(sx, sz))) * smooth(6, 14, L) * (1 - mtGap);
+    if (k > 0) L = crag(L, x, z, k);
+  }
+  if (cm > 0) L = lerp(L, canyonLand(x, z, whoops), cm);
   return SEA + L * fall - 9 * (1 - fall);
 }
 // Roads are kept per region in a one-block-resolution tile: distance to the nearest road centre line, the road's own height, and its type.
@@ -305,12 +359,12 @@ function rawHeight(x, z) {       // the land with roads cut into hillsides, bank
     if (!f) return t;
     const d = ROAD_R * (1 - f / 255);
     let prof = (tl.y[k] >> 1) / 8;
-    if (d > 2.9 && d < 4.7) {      // the edge: a parapet over water, a guard berm on embankments, and berms that come and go elsewhere
+    if (d > RW - 0.1 && d < RW + 1.7) {      // the edge: a parapet over water, a guard berm on embankments, and berms that come and go elsewhere
       if (bn < 0) bn = vnoise(x / 37, z / 37, 77);
       const amt = t < SEA - 0.3 ? 1 : Math.max(smooth(1.5, 3, prof - t) * 0.9, smooth(0.38, 0.48, bn) + smooth(0.6, 0.7, bn) * 0.75);
-      prof += amt * 1.2 * Math.sin((d - 2.9) / 1.8 * Math.PI);
+      prof += amt * 1.2 * Math.sin((d - RW + 0.1) / 1.8 * Math.PI);
     }
-    return lerp(t, prof, 1 - smooth(4.7, ROAD_R - 0.5, d));
+    return lerp(t, prof, 1 - smooth(RW + 1.7, ROAD_R - 0.5, d));
   };
   // blended between the four nearest blocks, so the ground under the wheels is a slope and not a staircase
   const a = cell(ix, iz), b = cell(ix + 1, iz), c = cell(ix, iz + 1), e = cell(ix + 1, iz + 1), u = fx - ix, v = fz - iz;
@@ -345,12 +399,13 @@ const temp = (x, z) => ((fbm(x / 1100 + 31, z / 1100 + 47, 5, 2) - 0.5) * 3.4 + 
 function naturalBiome(x, z, h) {
   const alt = h - SEA;
   if (alt < 0) return SEABED;
+  if (canyonMask(x, z) > 0.5) return CANYON;
   const t = temp(x, z);
   if (t < -0.4) return SNOW;
   if (alt <= 1) return BEACH;
-  if (t > 0.42) return DESERT;
-  if (alt > 56) return SNOW;
-  if (alt > 40) return ROCK;
+  const mt = alt > 40 ? massif(x, z) : 0;
+  if (t > 0.42 && mt < 8) return DESERT;      // desert country, except up a big mountain
+  if (alt > 40) return alt > 56 + 0.45 * mt ? SNOW : ROCK;      // the big mountains are bare rock a good way further up
   return fbm(x / 250 - 12, z / 250 + 8, 6, 3) > 0.56 ? FOREST : GRASS;
 }
 function biomeAt(x, z, h) {
@@ -388,7 +443,7 @@ function onStreet(x, z) {
   if (d > st.pad - 9) return true;
   return (Math.floor(x) - Math.floor(st.x) + 4000) % 40 < 8 || (Math.floor(z) - Math.floor(st.z) + 4000) % 40 < 8;
 }
-const onRoad = (x, z) => roadDist(x, z) < 3 || onStreet(x, z);
+const onRoad = (x, z) => roadDist(x, z) < RW || onStreet(x, z);
 const COAST8 = [[1, 0], [.7071067811865476, .7071067811865476], [0, 1], [-.7071067811865476, .7071067811865476], [-1, 0], [-.7071067811865476, -.7071067811865476], [0, -1], [.7071067811865476, -.7071067811865476]];
 function isCoast(x, z) {
   for (const [dx, dz] of COAST8) if (baseHeight(x + dx * 26, z + dz * 26) < SEA - 1) return true;
@@ -509,7 +564,7 @@ const LM_DEFS = [
       o.push([0, 0, 2.7]);
     } },
   { id: 'ufo', name: 'The Uninvited Guest', lore: 'Parked badly. No sign of the driver.', hint: 'Something fell out of the sky into the sand.',
-    pad: 10, flat: 3.5, want: b => b === DESERT,
+    pad: 10, flat: 3.5, want: b => b === DESERT || b === CANYON,
     xmat: () => mulN(T(0, 1.2, 0), RZ(0.32), RX(0.12)),
     build(m, g, x, o) {
       x.cbox(0, 0, 0, 6, 0.5, 6, C.dmetal); x.cbox(0, 0.5, 0, 9.5, 0.7, 9.5, C.metal); x.cbox(0, 1.2, 0, 6.5, 0.5, 6.5, C.metal); x.cbox(0, 1.7, 0, 3.2, 1.3, 3.2, C.glass);
@@ -665,7 +720,8 @@ function stampRoad(tile, rx, rz, pts, ys, off, main) {       // write the part o
       const yv = ys[k] + (ys[k + 1] - ys[k]) * q / n, ix0 = Math.floor(px) - x0, iz0 = Math.floor(pz) - z0;
       for (let dz = -ROAD_R; dz <= ROAD_R; dz++) {
         const iz = iz0 + dz; if (iz < 0 || iz >= REG) continue;
-        for (let dx = -ROAD_R; dx <= ROAD_R; dx++) {
+        const span = Math.ceil(Math.sqrt(ROAD_R * ROAD_R - dz * dz)) + 1;
+        for (let dx = -span; dx <= span; dx++) {
           const ix = ix0 + dx; if (ix < 0 || ix >= REG) continue;
           const d = hyp(ix + .5 + x0 - px, iz + .5 + z0 - pz) + off;
           if (d >= ROAD_R) continue;
@@ -720,7 +776,7 @@ function buildRoadTile(rx, rz) {
       if (dd < 110 || dd > 300 || baseHeight(x, z) < SEA + 1.5 || (st && hyp(x - st.x, z - st.z) < st.pad + 45)) continue;
       if (tile.f && tile.f[(Math.floor(z) - z0) * REG + Math.floor(x) - x0]) continue;       // the far end should be away from the main roads
       const pts = chaikin(astar(sx, sz, x, z, x0, z0, REG, REG), 2);
-      tile.roads.push({ pts, main: 0 }); stampRoad(tile, rx, rz, pts, profile(pts, par.ys[pi], null), 1.4, 0); tile.ends.push([x, z]);
+      tile.roads.push({ pts, main: 0 }); stampRoad(tile, rx, rz, pts, profile(pts, par.ys[pi], null), 3.5, 0); tile.ends.push([x, z]);
       break;
     }
   }
@@ -867,13 +923,73 @@ function decoPalm(mb, x, y, z, r) {
   mb.box(x - 2.4, y + h - .5, z + .25, x - 1.6, y + h, z + .75, lc); mb.box(x + 2.6, y + h - .5, z + .25, x + 3.4, y + h, z + .75, lc);
   mb.box(x + .25, y + h - .5, z - 2.4, x + .75, y + h, z - 1.6, lc); mb.box(x + .25, y + h - .5, z + 2.6, x + .75, y + h, z + 3.4, lc);
 }
-function decoRock(mb, x, y, z, r) { mb.box(x + .1, y, z + .15, x + .9, y + .45 + r * .5, z + .85, jit(GLAM ? [.9, .72, .98] : C.stone, .25, (r * 3.3) % 1)); }
-function decoBoulder(mb, x, y, z, r, snowy) {
-  const c = jit(GLAM ? [.9, .72, .98] : C.stone, .25, (r * 3.3) % 1);
+const REDROCK = [.72, .42, .3];
+function decoRock(mb, x, y, z, r, red) { mb.box(x + .1, y, z + .15, x + .9, y + .45 + r * .5, z + .85, jit(GLAM ? [.9, .72, .98] : red === 2 ? REDROCK : C.stone, .25, (r * 3.3) % 1)); }
+function decoBoulder(mb, x, y, z, r, snowy) {      // snowy: true for a cap of snow, 2 for red canyon rock
+  const c = jit(GLAM ? [.9, .72, .98] : snowy === 2 ? REDROCK : C.stone, .25, (r * 3.3) % 1);
   mb.box(x - .2, y, z - .1, x + 1.5, y + 1.3, z + 1.4, c); mb.box(x + .9, y, z + .8, x + 2.1, y + .8, z + 1.9, jit(c, .2, r));
-  if (snowy) mb.box(x - .2, y + 1.3, z - .1, x + 1.5, y + 1.45, z + 1.4, C.snow);
+  if (snowy === true) mb.box(x - .2, y + 1.3, z - .1, x + 1.5, y + 1.45, z + 1.4, C.snow);
 }
 function decoBush(mb, x, y, z, r, col) { if (GLAM) col = PINKS[Math.floor(r * 3.999) % 4]; mb.box(x + .1, y, z + .1, x + .9, y + .45 + r * .35, z + .9, col); }
+function decoSnag(mb, x, y, z, r) {      // a dead tree, bleached and bare
+  const c = GLAM ? [1, .7, .88] : jit([.6, .52, .42], .2, r), h = 2.6 + r * 1.6;
+  mb.box(x + .36, y, z + .36, x + .64, y + h, z + .64, c);
+  mb.box(x + .64, y + h * .55, z + .42, x + 1.4, y + h * .55 + .2, z + .58, c); mb.box(x + 1.22, y + h * .55, z + .42, x + 1.4, y + h * .9, z + .58, c);
+  mb.box(x + .42, y + h * .75, z - .5, x + .58, y + h * .75 + .2, z + .36, c);
+}
+const STRATA = [[.74, .38, .24], [.84, .52, .31], [.64, .32, .22], [.88, .64, .4], [.7, .42, .32]], CANYON_FLOOR = [.86, .68, .44];
+function spire(mb, obs, x, y, z, r, cx, cz) {      // a tower of rock, banded like the cliffs, with a cap balanced on top
+  const hgt = 9 + Math.floor(r * 15), col = i => GLAM ? PINKS[i % 4] : STRATA[i % 5];
+  let yy = y - 6;
+  for (let i = 0; yy < y + hgt; i++) { const y1 = Math.min(y + hgt, Math.max(yy, y) + 2), w = yy < y + hgt * 0.45 ? 0 : 0.45; mb.box(x - 1 + w, yy, z - 1 + w, x + 2 - w, y1, z + 2 - w, jit(col(i + Math.floor(r * 5)), .12, (r * 7 + i * .37) % 1)); yy = y1; }
+  mb.box(x - 1.15, y + hgt, z - 1.15, x + 2.15, y + hgt + 1.5, z + 2.15, col(1));
+  obs.push({ kind: 'bldg', x: x + .5, z: z + .5, r: 0, rr: 3, x0: x - 1, z0: z - 1, x1: x + 2, z1: z + 2, y, top: y + hgt + 1.5, cx, cz });
+}
+// Natural bridges: a patch of canyon gets one where a gorge is narrow enough to span. Each chunk builds the piece that crosses it.
+const archCache = new Map(), AG = 96;
+function archAt(gx, gz) {
+  const k = rkey(gx, gz);
+  let a = archCache.get(k);
+  if (a !== undefined) return a;
+  a = null;
+  for (let i = 0; i < 12 && !a; i++) {
+    const x = Math.floor((gx + 0.15 + hash2(gx * 5 + i, gz, 931) * 0.7) * AG), z = Math.floor((gz + 0.15 + hash2(gx, gz * 5 + i, 932) * 0.7) * AG);
+    if (canyonMask(x, z) < 0.97) continue;
+    const f = baseHeight(x + .5, z + .5);
+    for (const ax of hash2(gx, gz, 933) < 0.5 ? [0, 1] : [1, 0]) {
+      const reach = sg => { for (let d = 4; d <= 44; d += 2) { const hh = baseHeight(x + .5 + (ax ? 0 : sg * d), z + .5 + (ax ? sg * d : 0)); if (hh > f + 18) return [d, hh]; } return null; };      // rock standing well above this spot, both ways: the bottom of a gorge or a slot
+      const p = reach(1), n = p && reach(-1);
+      if (!n) continue;
+      a = { x, z, ax, lo: -n[0] - 3, hi: p[0] + 4, top: Math.floor(Math.min(p[1], n[1])) };
+      break;
+    }
+  }
+  if (archCache.size > 3000) archCache.clear();
+  archCache.set(k, a);
+  return a;
+}
+function archPart(mb, obs, a, ox, oz, cx, cz) {
+  const along = a.ax ? a.z : a.x, across = a.ax ? a.x : a.z, o0 = a.ax ? oz : ox, w0 = a.ax ? ox : oz;
+  if (across < w0 || across >= w0 + CH) return;
+  const t0 = Math.max(along + a.lo, o0), t1 = Math.min(along + a.hi, o0 + CH);
+  if (t1 <= t0) return;
+  const mid = along + (a.lo + a.hi) / 2, half = (a.hi - a.lo) / 2;
+  let deep = 0;
+  for (let t = t0; t < t1; t++) {      // thin over the middle, thick where it springs from the walls
+    const q = Math.abs(t + .5 - mid) / half, th = 2.4 + 6 * q * q, c = jit(STRATA[(t >> 1 & 1) + 1], .12, hash2(t, across, 934));
+    if (th > deep) deep = th;
+    if (a.ax) { mb.box(across - 2, a.top - th, t, across + 3, a.top, t + 1, c); mb.box(across - 1.4, a.top, t, across + 2.4, a.top + .5, t + 1, STRATA[3]); }
+    else { mb.box(t, a.top - th, across - 2, t + 1, a.top, across + 3, c); mb.box(t, a.top, across - 1.4, t + 1, a.top + .5, across + 2.4, STRATA[3]); }
+  }
+  const b = a.ax ? { x0: across - 2, x1: across + 3, z0: t0, z1: t1 } : { x0: t0, x1: t1, z0: across - 2, z1: across + 3 };
+  obs.push({ kind: 'bldg', x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2, r: 0, rr: 12, ...b, y: a.top - deep, base: a.top - deep, top: a.top + .5, cx, cz });
+}
+function decoFlag(mb, x, y, z) {      // a marker pole with an orange pennant: these stand along the ways up the big mountains
+  mb.box(x + .44, y, z + .44, x + .56, y + 3.5, z + .56, [.55, .56, .6]);
+  const f = mb.flag; mb.flag = f + 16;
+  mb.box(x + .56, y + 2.6, z + .46, x + 1.6, y + 3.4, z + .54, GLAM ? [1, .5, .8] : [1, .5, .1]);
+  mb.flag = f;
+}
 function decoLamp(mb, x, y, z) {
   mb.box(x + .4, y, z + .4, x + .6, y + 4.2, z + .6, C.dmetal);
   const f = mb.flag; mb.flag = f + 16;       // the lantern glows
@@ -923,6 +1039,8 @@ const DECO = {
   plant: { build: decoPlant, r: .4, ox: .5, bits: [.25, .6, .28] },
   fence: { build: decoFence, r: .45, ox: .5, knock: 3, mass: .03, stump: [.5, .52, .55], bits: [.6, .62, .64] },
   lamp: { build: decoLamp, r: .3, ox: .5, knock: 6, mass: .04, stump: C.dmetal, bits: [1, .9, .55] },
+  flag: { build: decoFlag, r: .25, ox: .5, knock: 2.5, mass: .02, stump: [.55, .56, .6], bits: [1, .5, .1] },
+  snag: { build: decoSnag, r: .3, ox: .5, knock: 4, mass: .06, stump: [.6, .52, .42], bits: [.62, .54, .44] },
 };
 const felled = new Set(), dirty = new Set(), props = [], bumps = [];
 
@@ -960,10 +1078,14 @@ function buildChunk(cx, cz) {
   for (let z = 0; z < CH; z++) for (let x = 0; x < CH; x++) {
     const wx = ox + x, wz = oz + z, h = g(x, z), b = biomeAt(wx, wz, h), rnd = hash2(wx, wz, 101);
     mb.flag = 0;
-    const rdv = roadDist(wx + .5, wz + .5), rmain = rdv < ROAD_R && roadIsMain(wx + .5, wz + .5), k = rdv < 3 ? 0.95 + rnd * 0.1 : 0.92 + rnd * 0.16;
-    let tc = TOPC[b];
-    if (rdv < 3 && h >= SEA) tc = rmain && rdv < 0.6 && (((wx >> 2) + (wz >> 2)) & 1) ? mix3(ROADC[b], LINEC, 0.6) : ROADC[b];        // a dashed centre line on the main roads
-    else if (rdv < 4.9 && h >= SEA && baseHeight(wx + .5, wz + .5) < SEA - 0.3) tc = PARAC;         // stone parapets where a road crosses water
+    const rdv = roadDist(wx + .5, wz + .5), rmain = rdv < ROAD_R && roadIsMain(wx + .5, wz + .5), k = rdv < RW ? 0.95 + rnd * 0.1 : 0.92 + rnd * 0.16;
+    let tc = TOPC[b], sw = 0;
+    if (b === CANYON) { sw = Math.floor(vnoise(wx / 40, wz / 40, 55) * 4); tc = h < SEA + 5 ? CANYON_FLOOR : mix3(tc, STRATA[((h + sw) >> 1) % 5], 0.4); }       // sand on the gorge floor; each ledge takes the colour of its band
+    if (rdv < RW && h >= SEA) tc = rmain && rdv < 0.9 && (((wx >> 2) + (wz >> 2)) & 1) ? mix3(ROADC[b], LINEC, 0.6) : ROADC[b];        // a dashed centre line on the main roads
+    else if (rdv < RW + 1.9 && h >= SEA && baseHeight(wx + .5, wz + .5) < SEA - 0.3) tc = PARAC;         // stone parapets where a road crosses water
+    massif(wx + .5, wz + .5);
+    const onTrail = mtTrail && h > SEA + 8;
+    if (onTrail && rdv >= RW) tc = mix3(tc, b === SNOW ? [.62, .6, .6] : [.5, .42, .33], 0.6);      // the worn track up a mountain gully
     let cc = null, gc = null;
     if (b === GROW) { gc = growCell(st, wx, wz); tc = GROWC[gc.t]; }
     if (b === CITY) {      // city ground: asphalt with lane dashes, pavement, lots, parks
@@ -982,8 +1104,9 @@ function buildChunk(cx, cz) {
       if (nh >= h) continue;
       for (let y = h - 1; y >= nh; y--) {
         let y0 = y; const depth = h - 1 - y;
-        if (depth >= 5) y0 = nh;
-        const sc = depth === 0 || b === DESERT || b === BEACH ? SIDEC[b] : depth === 1 && b !== SNOW ? SIDEC[b] : DEEPC;
+        if (b === CANYON) { if ((y + sw) & 1 && y > nh) y0 = y - 1; }      // canyon walls keep their bands all the way down
+        else if (depth >= 5) y0 = nh;
+        const sc = b === CANYON ? STRATA[((y + sw) >> 1) % 5] : depth === 0 || b === DESERT || b === BEACH ? SIDEC[b] : depth === 1 && b !== SNOW ? SIDEC[b] : DEEPC;
         const kk = 0.9 + hash2(wx + y * 31, wz + d * 7, 5) * 0.2, lo = y0 === nh ? 0.72 : 1;
         const r = sc[0] * kk, gg = sc[1] * kk, bb = sc[2] * kk;
         if (d === 0) mb.quad(wx + 1, y0, wz, wx + 1, y + 1, wz, wx + 1, y + 1, wz + 1, wx + 1, y0, wz + 1, r, gg, bb, 0, lo, 1, 1, lo);
@@ -991,6 +1114,7 @@ function buildChunk(cx, cz) {
         else if (d === 2) mb.quad(wx, y0, wz + 1, wx + 1, y0, wz + 1, wx + 1, y + 1, wz + 1, wx, y + 1, wz + 1, r, gg, bb, 4, lo, lo, 1, 1);
         else mb.quad(wx, y0, wz, wx + 1, y0, wz, wx + 1, y + 1, wz, wx, y + 1, wz, r, gg, bb, 5, lo, lo, 1, 1);
         if (y0 === nh) break;
+        y = y0;
       }
     }
     if (h < SEA) {
@@ -1003,7 +1127,7 @@ function buildChunk(cx, cz) {
       const gput = (kind, seed) => { if (felled.has(wx + ',' + wz)) return; const D = DECO[kind]; D.build(mb, wx, h, wz, seed); obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt: undefined, cx, cz, bh: 0 }); };
       if (gc.t === 2) { if (gc.px === 0 && gc.pz === 0) hoopHouse(mb, obs, gc.lotX + 1, h, gc.lotZ + 1, cx, cz); }
       else if (gc.t === 3) { if (gc.px % 2 === 1 && gc.pz % 2 === 0) gput('plant', hash2(wx, wz, 303)); }
-      else if (gc.t === 4) { if (rdv > 5.5) gput('fence', 0); }       // with a gap where the road comes in
+      else if (gc.t === 4) { if (rdv > RW + 2.5) gput('fence', 0); }       // with a gap where the road comes in
       else if (gc.yard) yardItem(mb, obs, gc.yx, gc.yz, wx, h, wz, cx, cz);
       else if (gc.t === 1 && gc.sx === 0 && gc.sz === 2 && hash2(wx, wz, 741) < 0.5) gput('lamp', 0);
       continue;
@@ -1017,7 +1141,7 @@ function buildChunk(cx, cz) {
       continue;
     }
     // decorations
-    let skip = Math.hypot(wx - spawn.x, wz - spawn.z) < 6 || rdv < 4.6;
+    let skip = Math.hypot(wx - spawn.x, wz - spawn.z) < 6 || rdv < RW + 1.6;
     for (const l of near) if (Math.hypot(wx + .5 - l.x, wz + .5 - l.z) < l.pad + 2.5) skip = true;
     if (skip) continue;
     const r2 = hash2(wx, wz, 202), r3 = hash2(wx, wz, 303), gone = felled.has(wx + ',' + wz);
@@ -1029,13 +1153,14 @@ function buildChunk(cx, cz) {
       obs.push({ x: wx + D.ox, z: wz + D.ox, r: D.r, kind, wx, wz, y: h, seed, opt, cx, cz, bh: D.bh ? D.bh(seed) : 0 });
     };
     const rockKind = r3 > 0.7 ? 'boulder' : 'rock';
+    if (onTrail) { if (hash2(wx, wz, 955) < 0.011) put('flag', r3); continue; }      // nothing grows on the track; flags stand along it
     if (GLAM && r2 > 0.62) {       // flowers come up all over a yassified patch
       mb.box(wx + .45, h, wz + .45, wx + .55, h + .4, wz + .55, [.6, .85, .6]); mb.box(wx + .3, h + .4, wz + .3, wx + .7, h + .7, wz + .7, PINKS[Math.floor(r3 * 3.999)]); mb.box(wx + .42, h + .7, wz + .42, wx + .58, h + .78, wz + .58, [1, .9, .4]);
       continue;
     }
-    if (rdv < 7.6) {      // the verge: lamps along main roads, hedgerows in stretches, flowers on the grass
-      if (rdv < 5.6 && rmain && hash2(wx, wz, 909) < 0.02) put('lamp', r3);
-      else if (rdv >= 5.6 && rdv < 6.8 && (b === GRASS || b === FOREST) && vnoise(wx / 45, wz / 45, 808) > 0.58 && r2 < 0.5) put('bush', 0.4 + r3 * 0.6, jit(C.leaf2, .25, r3));
+    if (rdv < RW + 4.6) {      // the verge: lamps along main roads, hedgerows in stretches, flowers on the grass
+      if (rdv < RW + 2.6 && rmain && hash2(wx, wz, 909) < 0.02) put('lamp', r3);
+      else if (rdv >= RW + 2.6 && rdv < RW + 3.8 && (b === GRASS || b === FOREST) && vnoise(wx / 45, wz / 45, 808) > 0.58 && r2 < 0.5) put('bush', 0.4 + r3 * 0.6, jit(C.leaf2, .25, r3));
       else if (b === GRASS && r2 < 0.16) { mb.box(wx + .45, h, wz + .45, wx + .55, h + .35, wz + .55, C.leaf); mb.box(wx + .34, h + .35, wz + .34, wx + .66, h + .62, wz + .66, FLOWERS[Math.floor(r3 * 4.99)]); }
       continue;
     }
@@ -1065,9 +1190,16 @@ function buildChunk(cx, cz) {
       else if (r2 < 0.013) put('rock', r3 * 0.69, false);
     } else if (b === ROCK) {
       if (r2 < 0.014) put(rockKind, r3, false);
+    } else if (b === CANYON) {
+      if (r2 < (h < SEA + 5 ? 0.0024 : 0.0004)) { if (rdv > RW + 7) spire(mb, obs, wx, h, wz, r3, cx, cz); }
+      else if (r2 < 0.006) put('cactus', r3);
+      else if (r2 < 0.014) put(rockKind, r3, 2);
+      else if (r2 < 0.021) put('bush', r3 * 0.3, [.62, .5, .3]);
+      else if (r2 < 0.0235) put('snag', r3);
     }
   }
-  GLAM = false;
+  GLAM = false; mb.flag = 8;
+  for (let gz = Math.floor((oz - 44) / AG); gz <= Math.floor((oz + CH + 44) / AG); gz++) for (let gx = Math.floor((ox - 44) / AG); gx <= Math.floor((ox + CH + 44) / AG); gx++) { const a = archAt(gx, gz); if (a) archPart(mb, obs, a, ox, oz, cx, cz); }
   return { cx, cz, mesh: makeMesh(mb), water: makeMesh(wb), obs };
 }
 const chunks = new Map(); let queue = [], lastCC = '';
@@ -1193,6 +1325,47 @@ function skyOf(rx, rz) {
 const orbitPos = (o, now, w) => { const a = now * w * (o.dir || 1) + o.ph, d = o.dir || 1; return [o.cx + Math.cos(a) * o.rad, o.y, o.cz + Math.sin(a) * o.rad, Math.atan2(-Math.sin(a) * d, Math.cos(a) * d)]; };
 const balloonPos = (b, now) => { const a = now * 0.035 + b.ph; return [b.cx + Math.cos(a) * b.rad, b.y + Math.sin(now * 0.4 + b.ph) * 1.5, b.cz + Math.sin(a) * b.rad]; };
 let skyAct = newSky();      // what is in the sky around the truck
+// Herds and boats are placed per region from the seed too, so two players find them in the same spots. A boat's course is a circle on open water,
+// and where it is on it depends only on the clock, so both players see it in the same place; what each animal does is each player's own.
+const herdCache = new Map(), boatCache = new Map(), animals = [];
+let boatsAct = [], herdT = 0;
+const HERD_BIOME = [['sheep', 'deer', 'sheep'], ['deer'], ['camel'], ['penguin'], null, ['goat'], null, null, null, ['goat', 'camel']];
+function herdsOf(rx, rz) {
+  const k = rkey(rx, rz);
+  let hs = herdCache.get(k);
+  if (hs) return hs;
+  hs = [];
+  for (let i = 0; i < 7; i++) {
+    const x = rx * REG + 30 + hash2(rx * 11 + i, rz, 951) * (REG - 60), z = rz * REG + 30 + hash2(rx, rz * 11 + i, 952) * (REG - 60), h = Math.floor(baseHeight(x, z));
+    if (h < SEA + 2 || hyp(x - spawn.x, z - spawn.z) < 40) continue;
+    const kinds = HERD_BIOME[biomeAt(x, z, h)];
+    if (kinds) hs.push({ x, z, kind: kinds[Math.floor(hash2(rx + i, rz - i, 953) * kinds.length * 0.999)], n: 3 + Math.floor(hash2(rx - i, rz + i, 954) * 3.99), live: 0, dud: false });
+  }
+  herdCache.set(k, hs);
+  return hs;
+}
+function boatsOf(rx, rz) {
+  const k = rkey(rx, rz);
+  let bs = boatCache.get(k);
+  if (bs) return bs;
+  bs = [];
+  for (let i = 0; i < 60 && bs.length < 3; i++) {
+    const rad = 16 + hash2(rx * 3 + i, rz, 963) * 50, room = REG - 2 * rad - 28;
+    const cx = rx * REG + rad + 14 + hash2(rx * 19 + i, rz, 961) * room, cz = rz * REG + rad + 14 + hash2(rx, rz * 19 + i, 962) * room;
+    let ok = true;
+    for (let j = 0; j < 16 && ok; j++) {      // deep water all the way round, with room either side
+      const a = j * 0.3927, c = Math.cos(a), sn = Math.sin(a);
+      if (baseHeight(cx + c * rad, cz + sn * rad) > SEA - 1.7 || baseHeight(cx + c * (rad + 5), cz + sn * (rad + 5)) > SEA - 1.2 || baseHeight(cx + c * (rad - 5), cz + sn * (rad - 5)) > SEA - 1.2) ok = false;
+    }
+    for (let j = 0; j < 32 && ok; j++) { const a = j * 0.19635; if (heightF(cx + Math.cos(a) * rad, cz + Math.sin(a) * rad) > SEA - 1.2) ok = false; }      // and no causeway across the course
+    for (const o of bs) if (hyp(o.cx - cx, o.cz - cz) < o.rad + rad + 8) ok = false;
+    if (!ok) continue;
+    const v = Math.floor(hash2(rx + i, rz + i, 964) * 2.999);
+    bs.push({ cx, cz, rad, y: WATER, ph: hash2(rx, rz + i, 965) * 6.2832, dir: hash2(rx - i, rz, 966) < 0.5 ? 1 : -1, v, w: [4.5, 3.6, 12][v] / rad, glam: false, wake: 0, hornT: 0 });
+  }
+  boatCache.set(k, bs);
+  return bs;
+}
 const skyStats = { rings: 0, trails: 0, balloons: 0 }, gotCrystals = new Set(), glamZones = [], bombs = [], blasts = [];
 let bombAmmo = 3, bombT = 0, thermalT = 0, skyPuffT = 0;
 const islandMesh = [7, 10, 14].map((r, v) => {
@@ -1269,7 +1442,7 @@ function paintMapTile(t) {      // the picture of one region: terrain, streets, 
   ctx.putImageData(img, 0, 0);
   ctx.lineCap = ctx.lineJoin = 'round';
   for (const r of tileAt(t.rx, t.rz).roads) {
-    ctx.strokeStyle = r.main ? 'rgba(244,232,200,.95)' : 'rgba(228,208,168,.8)'; ctx.lineWidth = r.main ? 1.3 : 0.8; ctx.beginPath();
+    ctx.strokeStyle = r.main ? 'rgba(244,232,200,.95)' : 'rgba(228,208,168,.8)'; ctx.lineWidth = r.main ? 2.6 : 1.6; ctx.beginPath();
     r.pts.forEach(([x, z], i) => { const px = (x - x0) / MPX, py = (z - z0) / MPX; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
     ctx.stroke();
   }
@@ -1337,6 +1510,9 @@ function refreshActive(force) {      // work out which sites and parcels are nea
     for (const kind in skyAct) for (const o of sk[kind]) skyAct[kind].push(o);
   }
   for (const p of skyAct.islands) p.got = gotCrystals.has(p.id);
+  boatsAct = [];
+  for (let cz = Math.floor(car.z - 330) >> RSH; cz <= Math.floor(car.z + 330) >> RSH; cz++) for (let cx = Math.floor(car.x - 330) >> RSH; cx <= Math.floor(car.x + 330) >> RSH; cx++)
+    for (const o of boatsOf(cx, cz)) boatsAct.push(o);
   if (pinned && !remote.alive && !landmarks.includes(pinned)) pinned = null;
 }
 if (save) {
@@ -1478,7 +1654,7 @@ function updateHud() {
   el.hook.textContent = (hook ? 'Hook out' : hookCd > 0 ? 'Hook ready in ' + Math.ceil(hookCd) + ' s' : 'Hook ready') + (car.fly ? ' · Bombs ' + '●'.repeat(bombAmmo) + '○'.repeat(3 - bombAmmo) : '');
   el.sky.textContent = skyStats.rings + gotCrystals.size + skyStats.balloons || car.fly ? `Sky: ${skyStats.rings} rings · ${gotCrystals.size} crystals · ${skyStats.balloons} balloons` : '';
   el.friend.textContent = ROOM ? (remote.alive ? 'Friend: ' + whereText(remote) : NET.status) : '';
-  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.fly ? 'Gliding · ' + Math.max(0, Math.round(car.air)) + ' m up' : car.road && car.biome !== CITY ? 'Road' : BIOME_NAME[car.biome];
+  el.spd.textContent = Math.round(Math.abs(car.vF) * 3.6); el.biome.textContent = car.fly ? 'Gliding · ' + Math.max(0, Math.round(car.air)) + ' m up' : car.road && car.biome !== CITY ? 'Road' : car.trail ? 'Mountain trail' : BIOME_NAME[car.biome];
   if (race) {
     const cp = race.cp, dx = cp.x - car.x, dz = cp.z - car.z, fx = Math.sin(car.h), fz = Math.cos(car.h);
     el.arrow.style.transform = `rotate(${Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz)}rad)`; el.arrow.style.opacity = 1;
@@ -1546,7 +1722,7 @@ function clearAt(x, z, r) {
   const cx = Math.floor(x / CH), cz = Math.floor(z / CH);
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     const c = chunks.get(ckey(cx + dx, cz + dz));
-    if (c) for (const o of c.obs) if (!o.dead && (o.kind === 'bldg' ? x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r : Math.hypot(o.x - x, o.z - z) < o.r + r)) return false;
+    if (c) for (const o of c.obs) if (!o.dead && (o.kind === 'bldg' ? !o.base && x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r : Math.hypot(o.x - x, o.z - z) < o.r + r)) return false;
   }
   for (const o of lmObs) if (Math.hypot(o.x - x, o.z - z) < o.r + r) return false;
   return true;
@@ -1599,8 +1775,9 @@ if (save && (save.found || []).length + (save.crates || []).length > 0) {
 }
 
 // ───────────────────────── physics ─────────────────────────
-const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8];      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
-const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3]];
+const GRIP = [5, 4.6, 3.8, 2.4, 3.8, 6.5, 3, 8.5, 4.8, 5.6];
+const MU = [.8, .76, .64, .6, .62, .92, .5, 1.1, .8, .88];      // how steep a slope the tyres can still drive up, by ground      // how well the tyres hold on grass, forest floor, sand, snow, beach, rock, shallows, city street
+const DUST = [[.5, .4, .28], [.42, .34, .24], [.9, .78, .52], [1, 1, 1], [.92, .85, .62], [.6, .6, .62], [.8, .92, 1], [.5, .5, .52], [.5, .42, .3], [.8, .5, .32]];
 function puff(x, y, z, col, size, up, em = 0.1) {
   if (parts.length > 260) parts.shift();
   parts.push({ x, y, z, vx: (Math.random() - .5) * 2, vy: up + Math.random() * 1.5, vz: (Math.random() - .5) * 2, life: 0.7 + Math.random() * 0.4, t: 0, size, col, em });
@@ -1655,7 +1832,7 @@ function hitBox(o) {      // the truck against a building's walls
 }
 function scenery(o, sp) {
   const k = o.kind, D = DECO[k], d = Math.hypot(o.x - car.x, o.z - car.z);
-  if (k === 'bldg') { if (car.y < o.top + 0.5) hitBox(o); return; }
+  if (k === 'bldg') { if (car.y < o.top + 0.5 && !(o.base > car.y + 3)) hitBox(o); return; }
   if (k === 'shroom') {
     if (d < 2.1 && car.air < 1 && boingT <= 0) {
       boingT = 0.4; car.pop = Math.min(24, 17 + sp * 0.28); sfxBoing(); shake = Math.max(shake, 0.2); popText('BOING!');
@@ -1693,7 +1870,7 @@ function landTricks() {
   else if (bits.length) { popText(bits.join(' + ')); if (flips || spins) [660, 880, 1175].forEach((f, i) => tone(f, i * 0.07, 0.3)); }
   airT = 0; car.flip = 0; car.yawAcc = 0;
 }
-let dustT = 0, biomeT = 0;
+let dustT = 0, biomeT = 0, steepT = 0, summitT = 0;
 // An island's flat top counts as ground for the truck while it is on one.
 function hAt(x, z) { const p = car.plat; return p && hyp(x - p.x, z - p.z) < p.r ? p.top : heightF(x, z); }
 function gAt(x, z) { const p = car.plat; return p && hyp(x - p.x, z - p.z) < p.r ? p.top : groundAt(x, z); }
@@ -1711,11 +1888,20 @@ function updateCar(dt) {
     fx = Math.sin(car.h); fz = Math.cos(car.h);
     const rx = -fz, rz = fx;
     vF = car.vx * fx + car.vz * fz; vL = car.vx * rx + car.vz * rz;
+    // how hard the tyres can drive depends on how steep it is the way the truck is pointed: past what the ground will hold, they just spin
+    const gx = (hAt(car.x + 1, car.z) - hAt(car.x - 1, car.z)) / 2, gz = (hAt(car.x, car.z + 1) - hAt(car.x, car.z - 1)) / 2, sl = Math.hypot(gx, gz);
+    const mu = car.plat ? 3 : car.road ? 1.1 : car.trail ? Math.max(MU[b], 0.95) : MU[b],      // a mountain gully is packed hard
+      bite = 1 - smooth(mu * 0.75, mu * 1.1, (gx * fx + gz * fz) * (thr < 0 ? -1 : 1));
+    steepT -= dt;
+    if (thr !== 0 && bite < 0.5) {
+      if (Math.random() < 0.35) puff(car.x - fx * 1.7 * thr, car.y + .2, car.z - fz * 1.7 * thr, DUST[b], 0.35, 1.6);
+      if (bite < 0.1 && steepT <= 0 && Math.abs(vF) < 5) { steepT = 40; stuckT = -6; toast('TOO STEEP', 'The tyres will not bite', 'Take it on a slant, or look for an easier line.', 4); }
+    }
     let vmax = (keys.boost ? BOOSTV : MAXV) * (car.road ? 1.12 : 1);
     if (b === DESERT || b === BEACH) vmax *= 0.92;
     if (inWater) vmax = 10;
-    if (thr > 0) vF += ACC * (keys.boost ? 1.3 : 1) * (vF < 9 ? 1.35 : 1) * Math.max(0, 1 - vF / vmax) * dt;
-    else if (thr < 0) { if (vF > 0.5) vF -= 38 * dt; else vF -= 13 * Math.max(0, 1 + vF / 10) * dt; }
+    if (thr > 0) vF += ACC * (keys.boost ? 1.3 : 1) * (vF < 9 ? 1.35 : 1) * Math.max(0, 1 - vF / vmax) * bite * dt;
+    else if (thr < 0) { if (vF > 0.5) vF -= 38 * dt; else vF -= 13 * Math.max(0, 1 + vF / 10) * bite * dt; }
     else vF -= vF * 0.7 * dt;
     vF -= vF * (car.road ? 0.085 : 0.12) * dt;
     if (inWater) vF -= vF * 2.0 * dt;
@@ -1725,12 +1911,29 @@ function updateCar(dt) {
     if (keys.brake) { vF -= Math.sign(vF) * Math.min(Math.abs(vF), 22 * dt); grip = 1.3; }
     vL *= Math.exp(-grip * dt);
     car.vx = fx * vF + rx * vL; car.vz = fz * vF + rz * vL;
-    const gx = (hAt(car.x + 1, car.z) - hAt(car.x - 1, car.z)) / 2, gz = (hAt(car.x, car.z + 1) - hAt(car.x, car.z - 1)) / 2;
-    if (thr === 0 && Math.hypot(car.vx, car.vz) < 1.6 && Math.hypot(gx, gz) < 0.6) { const k = Math.exp(-6 * dt); car.vx *= k; car.vz *= k; }
-    else { car.vx -= gx * SLOPE * dt; car.vz -= gz * SLOPE * dt; }
+    const pull = SLOPE * (1 + 1.2 * smooth(0.55, 1.1, sl));      // steep ground drags at the truck harder than its slope alone, so a run-up only gets it so far
+    if (thr === 0 && Math.hypot(car.vx, car.vz) < 1.6 && sl < 0.6) { const k = Math.exp(-6 * dt); car.vx *= k; car.vz *= k; }
+    else { car.vx -= gx * pull * dt; car.vz -= gz * pull * dt; }
   } else { const dh = car.steer * 1.8 * dt; car.h += dh; car.yawAcc += dh; if (car.air > 0.9 && keys.brake) car.flip += thr * 7.5 * dt; }
   const px = car.x, pz = car.z;
   car.x += car.vx * dt; car.z += car.vz * dt;
+  if (!car.plat) {      // a cliff is a wall, however fast it is hit or however well timed the hop
+    const hn = heightF(car.x, car.z), spd = Math.hypot(car.vx, car.vz);
+    let wall = !ctrl && hn > car.y + 1.4;
+    if (!wall && ctrl && spd > 0.5) wall = heightF(car.x + car.vx / spd * 1.5, car.z + car.vz / spd * 1.5) - hn > 2.7;
+    if (wall) {
+      let nx = heightF(car.x + 1, car.z) - heightF(car.x - 1, car.z), nz = heightF(car.x, car.z + 1) - heightF(car.x, car.z - 1), nl = Math.hypot(nx, nz);
+      if (nl < 0.5) { nx = car.vx; nz = car.vz; nl = spd || 1; }
+      nx /= nl; nz /= nl;
+      const vn = car.vx * nx + car.vz * nz;
+      car.x = px; car.z = pz;
+      if (vn > 0) {
+        car.vx -= nx * vn * 1.25; car.vz -= nz * vn * 1.25;
+        if (vn > 7) { sfxThump(); shake = Math.max(shake, Math.min(0.45, vn * 0.02)); car.rv += (Math.random() - .5) * 4; }
+        else if (steepT <= 0 && ctrl && thr !== 0) { steepT = 40; stuckT = -6; toast('A CLIFF', 'No way up here', 'Follow the wall along until it breaks. On the big mountains, orange flags mark a way up.', 5); }
+      }
+    }
+  }
   // scenery: flatten it, roll over it, bounce off it
   const sp0 = Math.hypot(car.vx, car.vz), ccx = Math.floor(car.x / CH), ccz = Math.floor(car.z / CH);
   bumps.length = 0; hopT -= dt; boingT -= dt;
@@ -1788,7 +1991,15 @@ function updateCar(dt) {
   car.sv += (-car.sy * 150 - car.sv * 7.5) * dt;
   car.sy = clamp(car.sy + car.sv * dt - (grounded ? clamp(g - pg - dhs, -0.25, 0.25) * 0.6 : 0), -0.32, 0.5);
   // bookkeeping
-  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); car.road = t >= SEA && onRoad(car.x, car.z); }
+  biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); car.road = t >= SEA && onRoad(car.x, car.z);
+    massif(car.x, car.z); car.trail = mtGap > 0.4;
+    summitT -= 0.2;
+    if (summitT <= 0 && car.air < 0.5 && g - SEA > 80) {      // on top of something big, with nothing higher close by
+      let peak = true;
+      for (let i = 0; i < 8 && peak; i++) if (heightF(car.x + Math.sin(i * 0.7854) * 16, car.z + Math.cos(i * 0.7854) * 16) > g - 0.4) peak = false;
+      if (peak) { summitT = 90; toast('SUMMIT', Math.round(g - SEA) + ' m above the sea', 'Nothing higher for a long way.', 5); [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.4)); }
+    }
+  }
   safeT -= dt;
   if (safeT <= 0 && car.air < 0.3 && g >= SEA && Math.abs(car.vF) > 4) { safeT = 0.8; lastSafe = { x: car.x, z: car.z, h: car.h }; }
   if (WATER - car.y > 1.5) { recover(); toast('TOO DEEP', 'Winched back to shore', 'The truck wades through shallows, not lakes.', 3); sfxThump(); }
@@ -1903,6 +2114,7 @@ function rocketBlast(r) {      // a proper bang: it flattens what is standing th
   if (parts.length > 260) parts.splice(0, parts.length - 260);
   tone(55, 0, 0.6, 'sawtooth', 0.14 * vol); tone(82, 0, 0.35, 'square', 0.09 * vol);
   shake = Math.max(shake, clamp(1 - d / 70, 0, 1) * 0.9);
+  for (const a of animals) { const ax = a.x - r.x, az = a.z - r.z, ad = hyp(ax, az) || 1; if (ad < 10 && a.down <= 0) bowl(a, ax / ad * 14, az / ad * 14, 30, false); }
   const ccx = Math.floor(r.x / CH), ccz = Math.floor(r.z / CH);
   for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
     const c = chunks.get(ckey(ccx + cx, ccz + cz));
@@ -1979,12 +2191,12 @@ function flyStep(dt) {
   car.hs = (heightF(car.x, car.z) * 2 + heightF(car.x + fx * 2, car.z + fz * 2) + heightF(car.x - fx * 2, car.z - fz * 2)) / 4;
   const g = Math.max(groundAt(car.x, car.z), WATER - 0.4); car.g = g; car.air = car.y - g;
   biomeT -= dt; if (biomeT <= 0) { biomeT = 0.2; const t = top(Math.floor(car.x), Math.floor(car.z)); car.biome = biomeAt(car.x, car.z, t); car.road = false; }
-  // things too tall to fly through: buildings and landmarks
-  let hit = null;
+  // things too tall to fly through: buildings, landmarks, and the side of a cliff
+  let hit = car.y < g - 1.2 ? [car.x + dx, car.z + dz] : null;
   const ccx = Math.floor(car.x / CH), ccz = Math.floor(car.z / CH);
   for (let cz = -1; cz <= 1 && !hit; cz++) for (let cx = -1; cx <= 1 && !hit; cx++) {
     const c = chunks.get(ckey(ccx + cx, ccz + cz));
-    if (c) for (const o of c.obs) if (o.kind === 'bldg' && car.y < o.top + 0.4 && car.x > o.x0 - 1.2 && car.x < o.x1 + 1.2 && car.z > o.z0 - 1.2 && car.z < o.z1 + 1.2) { hit = [o.x, o.z]; break; }
+    if (c) for (const o of c.obs) if (o.kind === 'bldg' && car.y < o.top + 0.4 && !(o.base > car.y + 2.7) && car.x > o.x0 - 1.2 && car.x < o.x1 + 1.2 && car.z > o.z0 - 1.2 && car.z < o.z1 + 1.2) { hit = [o.x, o.z]; break; }
   }
   if (!hit) for (const o of lmObs) if (car.y < o.y + 11 && Math.hypot(o.x - car.x, o.z - car.z) < o.r + 1.2) { hit = [o.x, o.z]; break; }
   if (hit) {       // into a wall: wings fold and it drops
@@ -2181,6 +2393,7 @@ function updateNpcs(dt) {
     const probe = (a, r) => groundAt(n.x + Math.sin(n.h + a) * r, n.z + Math.cos(n.h + a) * r);
     const wet = thief ? SEA - 0.5 : SEA - 1.5;     // thieves will not even get their wheels wet, so rivers and shores corner them
     if (probe(0, 13) < wet || probe(0, 6) < wet) want = n.h + (probe(0.9, 13) > probe(-0.9, 13) ? 1.4 : -1.4);
+    else if (probe(0, 5) - n.y > 5.5) want = n.h + (probe(0.9, 9) < probe(-0.9, 9) ? 1.4 : -1.4);      // a cliff ahead: turn along it, towards the lower side
     const turn = thief ? (d < 15 ? 1.1 : 1.8) : 2.4;
     n.h += clamp(angDiff(want, n.h), -turn * dt, turn * dt);
     const fx = Math.sin(n.h), fz = Math.cos(n.h);
@@ -2189,6 +2402,7 @@ function updateNpcs(dt) {
     if (n.y < WATER - 0.1) vt = Math.min(vt, thief ? 6 : 11);
     n.v += (vt - n.v) * Math.min(1, dt * 1.6);
     n.vx = fx * n.v; n.vz = fz * n.v; n.x += n.vx * dt; n.z += n.vz * dt;
+    if (heightF(n.x, n.z) - n.hs > 0.08 + Math.abs(n.v) * dt * 2.3) { n.x -= n.vx * dt; n.z -= n.vz * dt; n.v *= 0.7; }      // no climbing cliffs
     // scenery: they flatten trees too, and bounce off what will not move
     const ccx = Math.floor(n.x / CH), ccz = Math.floor(n.z / CH);
     for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
@@ -2197,7 +2411,7 @@ function updateNpcs(dt) {
         if (o.dead) continue;
         if (o.kind === 'bldg') {
           const qx = clamp(n.x, o.x0, o.x1), qz = clamp(n.z, o.z0, o.z1), bd = Math.hypot(n.x - qx, n.z - qz);
-          if (bd < 1.3 && n.y < o.top) { if (bd > 1e-4) { n.x += (n.x - qx) / bd * (1.3 - bd); n.z += (n.z - qz) / bd * (1.3 - bd); } else n.x += 2; n.v *= 0.8; }
+          if (bd < 1.3 && n.y < o.top && !o.base) { if (bd > 1e-4) { n.x += (n.x - qx) / bd * (1.3 - bd); n.z += (n.z - qz) / bd * (1.3 - bd); } else n.x += 2; n.v *= 0.8; }
           continue;
         }
         const ox = n.x - o.x, oz = n.z - o.z, od = Math.hypot(ox, oz), m = o.r + 1.2;
@@ -2244,15 +2458,137 @@ function updateNpcs(dt) {
   }
 }
 
+// ───────────────────────── animals and boats ─────────────────────────
+const SPECIES = {
+  sheep: { leg: .55, lx: .27, lz: .45, lw: .15, legc: [.18, .17, .17], run: 9.5, walk: 1.3, gait: 2.6, r: .7, sc: 1.15, cry: 'BAA!', pitch: 420 },
+  deer: { leg: 1, lx: .22, lz: .55, lw: .13, legc: [.5, .34, .2], run: 15, walk: 1.6, gait: 1.7, r: .7, sc: 1.1, cry: 'OOF!', pitch: 300 },
+  camel: { leg: 1.5, lx: .28, lz: .7, lw: .17, legc: [.66, .5, .3], run: 11, walk: 1.5, gait: 1.2, r: .9, sc: 1.1, cry: 'GRONK!', pitch: 150 },
+  goat: { leg: .7, lx: .2, lz: .42, lw: .12, legc: [.75, .73, .68], run: 13, walk: 1.5, gait: 2.4, r: .6, sc: 1.1, cry: 'MEH!', pitch: 520 },
+  penguin: { leg: 0, run: 7, walk: 0.9, gait: 5, r: .5, sc: 1.2, cry: 'NOOT!', pitch: 700 },
+};
+const animalMesh = (() => {      // bodies only, standing at the origin and facing +Z; the legs are drawn separately so they can swing
+  const mk = f => { const m = new MB(); m.lo = .9; f(m); return makeMesh(m); }, dk = [.18, .17, .17];
+  return {
+    sheep: mk(m => { const w = [.95, .94, .9]; m.box(-.42, .5, -.65, .42, 1.3, .65, w); m.box(-.3, 1.3, -.45, .3, 1.42, .45, [.9, .89, .84]); m.box(-.2, .95, .65, .2, 1.4, 1.05, dk); m.box(-.32, 1.25, .7, -.2, 1.35, .88, dk); m.box(.2, 1.25, .7, .32, 1.35, .88, dk); m.box(-.1, .95, -.75, .1, 1.15, -.65, w); }),
+    deer: mk(m => { const c = [.62, .44, .28], d = [.45, .32, .2], w = [.94, .91, .85]; m.box(-.3, 1, -.75, .3, 1.6, .75, c); m.box(-.17, 1.5, .55, .17, 2.25, .9, c); m.box(-.19, 2.05, .75, .19, 2.42, 1.3, c); m.box(-.12, 2.08, 1.3, .12, 2.28, 1.42, dk);
+      m.box(-.31, 2.42, .85, -.21, 2.95, .95, d); m.box(.21, 2.42, .85, .31, 2.95, .95, d); m.box(-.52, 2.78, .85, -.31, 2.88, .95, d); m.box(.31, 2.78, .85, .52, 2.88, .95, d); m.box(-.12, 1.3, -.88, .12, 1.6, -.75, w); m.box(-.28, 1, -.74, .28, 1.12, .74, w); }),
+    camel: mk(m => { const c = [.78, .62, .38], d = [.68, .52, .3]; m.box(-.4, 1.5, -.95, .4, 2.25, .95, c); m.box(-.3, 2.25, -.5, .3, 2.78, .25, d); m.box(-.17, 2, .85, .17, 3.15, 1.2, c); m.box(-.2, 2.95, 1.05, .2, 3.32, 1.72, c); m.box(-.13, 2.98, 1.72, .13, 3.2, 1.8, dk); m.box(-.06, 1.5, -1.05, .06, 2.1, -.95, d); }),
+    goat: mk(m => { const c = [.88, .86, .8], hn = [.32, .28, .22]; m.box(-.27, .7, -.55, .27, 1.2, .55, c); m.box(-.17, 1.1, .5, .17, 1.52, .92, c); m.box(-.15, 1.52, .5, -.07, 1.85, .6, hn); m.box(.07, 1.52, .5, .15, 1.85, .6, hn); m.box(-.15, 1.75, .36, -.07, 1.85, .5, hn); m.box(.07, 1.75, .36, .15, 1.85, .5, hn); m.box(-.06, .92, .8, .06, 1.1, .9, [.7, .68, .62]); m.box(-.08, 1.1, -.64, .08, 1.3, -.55, c); }),
+    penguin: mk(m => { const b = [.13, .14, .18], o = [.95, .6, .15]; m.box(-.3, .12, -.26, .3, 1.05, .26, b); m.box(-.21, .18, .26, .21, .95, .31, [.96, .96, .94]); m.box(-.23, 1.05, -.22, .23, 1.45, .22, b); m.box(-.08, 1.15, .22, .08, 1.25, .42, o); m.box(-.24, 0, -.05, -.06, .12, .36, o); m.box(.06, 0, -.05, .24, .12, .36, o); m.box(-.38, .4, -.12, -.3, .95, .12, b); m.box(.3, .4, -.12, .38, .95, .12, b); }),
+  };
+})();
+const boatMesh = (() => {      // bow towards +Z, origin on the waterline
+  const white = [.94, .94, .91], dark = [.16, .17, .2], glass = [.2, .32, .45], wood = [.58, .4, .24];
+  const hull = (m, w, l, y0, y1, c) => { m.box(-w, y0, -l, w, y1, l * .8, c); m.box(-w * .68, y0, l * .8, w * .68, y1, l * 1.1, c); m.box(-w * .32, y0 + .2, l * 1.1, w * .32, y1, l * 1.35, c); };
+  const f = new MB(); f.lo = .9;      // a fishing boat
+  hull(f, 1.25, 2.8, -.5, .25, [.15, .3, .5]); hull(f, 1.27, 2.82, .25, .75, white); f.box(-1.05, .75, -2.6, 1.05, .8, 2.2, wood);
+  f.box(-.8, .8, -2.2, .8, 2.2, -.5, [.85, .3, .2]); f.box(-.95, 2.2, -2.35, .95, 2.35, -.35, white); f.box(-.6, 1.4, -.5, .6, 2, -.45, glass); f.box(-.81, 1.4, -1.9, -.8, 2, -.8, glass); f.box(.8, 1.4, -1.9, .81, 2, -.8, glass);
+  f.box(-.06, .8, .7, .06, 3.5, .82, dark); f.box(-.06, 3, .82, .06, 3.1, 2.1, dark); f.box(-.5, .8, 1.1, .1, 1.3, 1.7, C.card); f.box(.2, .8, 1.3, .7, 1.2, 1.8, [.3, .5, .35]);
+  f.flag = 16; f.box(-.14, 3.5, .62, .14, 3.78, .9, [1, .9, .55]); f.flag = 0;
+  const sl = new MB(); sl.lo = .9;      // a sailing boat
+  hull(sl, 1, 2.7, -.5, .6, wood); sl.box(-.82, .6, -2.5, .82, .66, 2, [.8, .7, .5]); sl.box(-.5, .66, -1.6, .5, 1.15, -.2, white); sl.box(-.07, .6, .2, .07, 7.4, .34, dark); sl.box(-.05, 1.3, -2.4, .05, 1.42, .2, dark);
+  for (let k = 0; k < 6; k++) sl.box(-.04, 1.45 + k * .96, -2.3 + k * .4, .04, 2.41 + k * .96, .16, k % 2 ? [.97, .97, .94] : white);
+  for (let k = 0; k < 5; k++) sl.box(-.04, 1.2 + k * 1.05, .4, .04, 2.25 + k * 1.05, 3.3 - k * .58, [.9, .32, .25]);
+  sl.flag = 16; sl.box(-.1, 7.4, .17, .1, 7.6, .37, [1, .9, .55]); sl.flag = 0;
+  const sp = new MB(); sp.lo = .9;      // a speedboat
+  hull(sp, 1, 2.6, -.4, .45, [.86, .16, .14]); sp.box(-1.02, .18, -2.62, 1.02, .3, 2.1, white); sp.box(-.85, .45, -2.3, .85, .5, 1.6, white); sp.box(-.8, .5, .5, .8, 1.1, .6, glass);
+  sp.box(-.6, .5, -.6, -.1, .95, -.1, dark); sp.box(.1, .5, -.6, .6, .95, -.1, dark); sp.box(-.25, -.2, -3.05, .25, .95, -2.6, dark);
+  return [makeMesh(f), makeMesh(sl), makeMesh(sp)];
+})();
+function spawnHerd(hd) {
+  const S = SPECIES[hd.kind];
+  for (let i = 0; i < hd.n && animals.length < 44; i++) {
+    const a = Math.random() * 6.2832, r = 2 + Math.random() * 9, x = hd.x + Math.sin(a) * r, z = hd.z + Math.cos(a) * r, y = groundAt(x, z);
+    if (y < SEA + 0.8) continue;
+    animals.push({ herd: hd, S, kind: hd.kind, x, z, y, h: Math.random() * 6.2832, v: 0, mode: 'graze', t: 1 + Math.random() * 6, tx: x, tz: z, away: 0, ph: Math.random() * 6, glam: false, down: 0, vy: 0, fx: 0, fz: 0, roll: 0, size: 0.85 + Math.random() * 0.3 });
+    hd.live++;
+  }
+  if (!hd.live) hd.dud = true;
+}
+function bowl(a, vx, vz, sp, mine) {      // knocked flying. It is not hurt: it rolls, gets up and runs
+  a.down = 1.3; a.fx = vx * 0.7 + (Math.random() - .5) * 3; a.fz = vz * 0.7 + (Math.random() - .5) * 3; a.vy = 5 + sp * 0.12; a.y += 0.25;
+  for (let i = 0; i < 6; i++) puff(a.x + (Math.random() - .5), a.y + 0.8, a.z + (Math.random() - .5), a.glam ? PINKS[i % 4] : a.kind === 'sheep' ? [.95, .94, .9] : DUST[car.biome], 0.3, 2.5);
+  const vol = clamp(1 - Math.hypot(a.x - car.x, a.z - car.z) / 80, 0, 1) * 0.05;
+  if (vol > 0.004) { tone(a.S.pitch, 0, 0.16, 'sawtooth', vol); tone(a.S.pitch * 0.86, 0.12, 0.26, 'sawtooth', vol); }
+  if (mine) { car.vx *= 0.94; car.vz *= 0.94; shake = Math.max(shake, 0.15); popText(a.S.cry); }
+}
+function updateAnimals(dt) {
+  herdT -= dt;
+  if (herdT <= 0) {      // herds come to life as the truck gets near their ground
+    herdT = 1;
+    for (let cz = Math.floor(car.z - 240) >> RSH; cz <= Math.floor(car.z + 240) >> RSH; cz++) for (let cx = Math.floor(car.x - 240) >> RSH; cx <= Math.floor(car.x + 240) >> RSH; cx++)
+      for (const hd of herdsOf(cx, cz)) if (!hd.live && !hd.dud && hyp(hd.x - car.x, hd.z - car.z) < 240) spawnHerd(hd);
+  }
+  for (let i = animals.length - 1; i >= 0; i--) {
+    const a = animals[i], S = a.S, dcx = a.x - car.x, dcz = a.z - car.z, dc = hyp(dcx, dcz);
+    if (dc > 320) { a.herd.live--; animals.splice(i, 1); continue; }
+    if (a.down > 0) {
+      a.down -= dt; a.vy -= GRAV * dt; a.x += a.fx * dt; a.z += a.fz * dt; a.y += a.vy * dt; a.roll += dt * 9;
+      const gy = Math.max(groundAt(a.x, a.z), WATER - 0.3);
+      if (a.y <= gy) { a.y = gy; a.vy = 0; const f = Math.exp(-4 * dt); a.fx *= f; a.fz *= f; }
+      if (a.down <= 0) { a.roll = 0; a.mode = 'flee'; a.t = 3; a.away = Math.atan2(dcx, dcz); }
+      continue;
+    }
+    // the nearest thing on wheels: a truck coming fast is alarming from further off, and one gliding high overhead is not alarming at all
+    let Th = null, td = 1e9;
+    if (!(car.fly && car.air > 9)) { Th = car; td = dc; }
+    if (remote.alive) { const d = hyp(a.x - remote.x, a.z - remote.z); if (d < td) { td = d; Th = remote; } }
+    for (const n of npcs) if (n.alive) { const d = hyp(a.x - n.x, a.z - n.z); if (d < td) { td = d; Th = n; } }
+    if (Th && td < 13 + hyp(Th.vx, Th.vz) * 0.55) { a.mode = 'flee'; a.t = 2.2; a.away = Math.atan2(a.x - Th.x, a.z - Th.z); }
+    let want = a.h, vt = 0;
+    if (a.mode === 'flee') {
+      a.t -= dt; want = a.away + Math.sin(a.ph * 0.31 + i) * 0.5; vt = S.run;
+      if (a.t <= 0) { a.mode = 'graze'; a.t = 2 + Math.random() * 4; }
+    } else if (a.mode === 'walk') {
+      const dx = a.tx - a.x, dz = a.tz - a.z; want = Math.atan2(dx, dz); vt = S.walk; a.t -= dt;
+      if (dx * dx + dz * dz < 2 || a.t <= 0) { a.mode = 'graze'; a.t = 2 + Math.random() * 7; }
+    } else {
+      a.t -= dt;
+      if (a.t <= 0) { a.mode = 'walk'; a.t = 14; const an = Math.random() * 6.2832, r = Math.random() * 22; a.tx = a.herd.x + Math.sin(an) * r; a.tz = a.herd.z + Math.cos(an) * r; }
+    }
+    a.h += clamp(angDiff(want, a.h), -4 * dt, 4 * dt);
+    a.v += (vt - a.v) * Math.min(1, dt * 5);
+    if (a.v > 0.05) {
+      const sx = Math.sin(a.h), sz = Math.cos(a.h), ahead = groundAt(a.x + sx * 2.5, a.z + sz * 2.5);
+      if (ahead < SEA + 0.4 || Math.abs(ahead - a.y) > 2.6) { a.h += (i % 2 ? 3 : -3) * dt; a.away = a.h; a.v *= 0.9; }      // water or a cliff ahead: turn aside
+      else { a.x += sx * a.v * dt; a.z += sz * a.v * dt; a.y += (groundAt(a.x, a.z) - a.y) * Math.min(1, dt * 14); }
+      a.ph += a.v * dt * S.gait;
+    }
+    if (a.glam && Math.random() < dt * 3) puff(a.x, a.y + 1.2, a.z, GLIT[Math.floor(Math.random() * GLIT.length)], 0.2, 1.5, 0.8);
+    if (dc < S.r + 1.7 && dc > 1e-3 && !car.fly && Math.abs(car.y - a.y) < 2.5) {      // in the way of the truck
+      const sp = hyp(car.vx, car.vz);
+      if (sp > 6) bowl(a, car.vx, car.vz, sp, true);
+      else { const k = (S.r + 1.7 - dc) / dc; a.x += dcx * k; a.z += dcz * k; }
+    }
+  }
+}
+function updateBoats(dt) {
+  const now = Date.now() / 1000;
+  for (const o of boatsAct) {
+    const [bx, , bz, yaw] = orbitPos(o, now, o.w), dx = car.x - bx, dz = car.z - bz, d = hyp(dx, dz);
+    if (d > 180) continue;
+    o.wake -= dt; o.hornT -= dt;
+    if (o.wake <= 0) { o.wake = o.v === 2 ? 0.05 : 0.14; puff(bx - Math.sin(yaw) * 5.2, WATER + .15, bz - Math.cos(yaw) * 5.2, o.glam ? PINKS[0] : [.92, .97, 1], o.v === 2 ? 0.5 : 0.32, o.v === 2 ? 2.2 : 0.8); }
+    if (d > 11 || car.y > WATER + (o.v === 1 ? 13.5 : o.v === 0 ? 6 : 2.6)) continue;
+    const al = clamp(dx * Math.sin(yaw) + dz * Math.cos(yaw), -5, 5.8), ex = car.x - bx - Math.sin(yaw) * al, ez = car.z - bz - Math.cos(yaw) * al, e = hyp(ex, ez) || 1;
+    if (e > 3.3) continue;
+    // ran into it: the boat carries on, the truck does not
+    car.x += ex / e * (3.3 - e); car.z += ez / e * (3.3 - e); car.vx = ex / e * 9; car.vz = ez / e * 9;
+    if (car.fly) { car.fly = false; car.vy = Math.min(car.vy, 3); sfxCrunch(); popText('CRUNCH'); }
+    shake = Math.max(shake, 0.5); sfxThump();
+    if (o.hornT <= 0) { o.hornT = 2; tone(o.v === 2 ? 330 : 165, 0, 0.5, 'square', 0.07); tone(o.v === 2 ? 392 : 196, 0.05, 0.5, 'square', 0.05); }
+  }
+}
+
 // ───────────────────────── grappling hook ─────────────────────────
 let hook = null, hookCd = 0;      // hook: { phase: fly | pull | reel | back, x, y, z, vx, vy, vz, t, tgt, npc, hold }
-const HOOK_H = { oak: 7, pine: 7.5, palm: 7.5, cactus: 4, boulder: 1.6, lamp: 4.8 };
+const HOOK_H = { oak: 7, pine: 7.5, palm: 7.5, cactus: 4, boulder: 1.6, lamp: 4.8, snag: 3.6 };
 function hookSnags(x, y, z) {     // does the flying hook bite into scenery here
   const ccx = Math.floor(x / CH), ccz = Math.floor(z / CH);
   for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
     const c = chunks.get(ckey(ccx + cx, ccz + cz));
     if (c) for (const o of c.obs) {
-      if (o.kind === 'bldg') { if (y < o.top && x > o.x0 - .3 && x < o.x1 + .3 && z > o.z0 - .3 && z < o.z1 + .3) return true; continue; }
+      if (o.kind === 'bldg') { if (y < o.top && !(o.base > y) && x > o.x0 - .3 && x < o.x1 + .3 && z > o.z0 - .3 && z < o.z1 + .3) return true; continue; }
       const H = HOOK_H[o.kind];
       if (!H || o.dead || y > o.y + H) continue;
       if (Math.hypot(o.x - x, o.z - z) < (H > 5 && y > o.y + 3 ? 1.6 : o.r + 0.5)) return true;
@@ -2366,6 +2702,8 @@ function explodeGlitter(b, wet) {      // not a bang so much as a makeover
   if (!wet) addGlam(b.x, b.z, 13);
   if (b.mine) popText(SLAY[Math.floor(Math.random() * SLAY.length)]);
   if (d < 12 && !car.fly) { car.pop = Math.max(car.pop, 5); car.rv += (Math.random() - .5) * 5; if (!b.mine) popText('YOU GOT GLITTERED'); }
+  for (const a of animals) if (hyp(a.x - b.x, a.z - b.z) < 13 && Math.abs(a.y - b.y) < 9) a.glam = true;
+  for (const o of boatsAct) { const [bx, , bz] = orbitPos(o, Date.now() / 1000, o.w); if (hyp(bx - b.x, bz - b.z) < 15 && b.y < WATER + 8) o.glam = true; }
   if (guestMode()) return;      // the host decides who was standing in it
   for (const n of npcs) if (n.alive && !(n.glam > 0) && hyp(n.x - b.x, n.z - b.z) < 12 && Math.abs(n.y - b.y) < 9) {
     if (n.type === 'rival') { n.hookSlow = 3.5; n.v = 0; popText('THIEF YASSIFIED'); continue; }
@@ -2381,7 +2719,7 @@ function updateBombs(dt) {
     let hit = b.y <= Math.max(g, WATER);
     if (!hit) {      // rooftops and islands count too
       const ccx = Math.floor(b.x / CH), ccz = Math.floor(b.z / CH);
-      for (let cz = -1; cz <= 1 && !hit; cz++) for (let cx = -1; cx <= 1 && !hit; cx++) { const c = chunks.get(ckey(ccx + cx, ccz + cz)); if (c) for (const o of c.obs) if (o.kind === 'bldg' && b.y <= o.top && b.x > o.x0 && b.x < o.x1 && b.z > o.z0 && b.z < o.z1) { hit = true; break; } }
+      for (let cz = -1; cz <= 1 && !hit; cz++) for (let cx = -1; cx <= 1 && !hit; cx++) { const c = chunks.get(ckey(ccx + cx, ccz + cz)); if (c) for (const o of c.obs) if (o.kind === 'bldg' && b.y <= o.top && !(o.base > b.y) && b.x > o.x0 && b.x < o.x1 && b.z > o.z0 && b.z < o.z1) { hit = true; break; } }
       for (const p of skyAct.islands) if (b.y <= p.top && b.y > p.top - p.r && hyp(b.x - p.x, b.z - p.z) < p.r) hit = true;
     }
     if (hit || b.t > 14) { bombs.splice(i, 1); if (hit) explodeGlitter(b, g < WATER && b.y <= WATER); }
@@ -2755,6 +3093,24 @@ function render(time) {
     for (const [lx, lz] of thief ? TWHEELS : WHEELS) draw(carMesh.wheel, mulN(nm, T(lx, 0.6 * ws, lz), RX(n.spin), Sc(ws, ws, ws)));
     if (Math.hypot(n.x - car.x, n.z - car.z) > 18) draw(cubeMesh, mulN(T(n.x, n.y + (thief ? 5.2 : 5.6) + Math.sin(time * 4) * 0.3, n.z), RY(time * 2), RZ(0.785), RX(0.785), Sc(.55, .55, .55)), { emis: 1, tint: n.type === 'rival' ? [1, .35, .85] : thief ? [1, .85, .2] : [1, .2, .15] });
   }
+  for (const a of animals) {
+    if (Math.hypot(a.x - cam.eye[0], a.z - cam.eye[2]) > maxD) continue;
+    const S = a.S, sz = a.size * S.sc, look = a.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined;
+    let m = mulN(T(a.x, a.y + (a.glam && a.down <= 0 ? Math.abs(Math.sin(time * 7 + a.ph)) * 0.6 : 0), a.z), RY(a.h), Sc(sz, sz, sz));
+    if (a.down > 0) m = mulN(m, T(0, S.leg + .4, 0), RX(a.roll), T(0, -S.leg - .4, 0));
+    else if (!S.leg) m = mul(m, a.mode === 'flee' ? mul(T(0, .3, 0), RX(1.35)) : RZ(Math.sin(a.ph) * 0.16));      // penguins waddle, and toboggan when in a hurry
+    draw(animalMesh[a.kind], m, look);
+    if (S.leg) for (let i = 0, sw = Math.min(0.75, a.v * 0.09); i < 4; i++)
+      draw(cubeMesh, mulN(m, T(i & 1 ? S.lx : -S.lx, S.leg, i < 2 ? S.lz : -S.lz), RX(Math.sin(a.ph + (i === 0 || i === 3 ? 0 : Math.PI)) * sw), T(0, -S.leg / 2, 0), Sc(S.lw, S.leg, S.lw)), { tint: a.glam ? [1, .5, .8] : S.legc });
+  }
+  {
+    const now = Date.now() / 1000;
+    for (const o of boatsAct) {
+      const [bx, , bz, yaw] = orbitPos(o, now, o.w);
+      if (Math.hypot(bx - cam.eye[0], bz - cam.eye[2]) > maxD + 30) continue;
+      draw(boatMesh[o.v], mulN(T(bx, WATER + 0.1 + Math.sin(time * 1.7 + o.ph) * 0.12, bz), RY(yaw), RZ(Math.sin(time * 1.3 + o.ph) * 0.06 - (o.v === 2 ? 0.14 * o.dir : 0)), RX(Math.sin(time * 1.1 + o.ph) * 0.04 - (o.v === 2 ? 0.1 : 0)), Sc(1.8, 1.8, 1.8)), o.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined);
+    }
+  }
   for (const b of bombs) draw(bombMesh, mulN(T(b.x, b.y, b.z), RY(Math.atan2(b.vx, b.vz)), RX(Math.atan2(-b.vy, hyp(b.vx, b.vz) + 0.01))), { emis: 0.35 });
   // the sky: seen from a long way off
   {
@@ -2837,7 +3193,7 @@ function tick(dt, now, drawIt = true) {
     updateCar(dt / 2); updateCar(dt / 2);
     playTime += dt; tod = (tod + dt / 540) % 1;
     saveT -= dt; if (saveT <= 0) { saveT = 5; doSave(); }
-    updateNpcs(dt); updateRace(dt); skyTick(dt); updateBombs(dt);
+    updateNpcs(dt); updateAnimals(dt); updateBoats(dt); updateRace(dt); skyTick(dt); updateBombs(dt);
     if (dirty.size) {     // re-mesh chunks that just lost a tree
       for (const k of dirty) { const c = chunks.get(k); if (c) { freeMesh(c.mesh); freeMesh(c.water); chunks.set(k, buildChunk(c.cx, c.cz)); } }
       dirty.clear();
@@ -2875,7 +3231,7 @@ requestAnimationFrame(frame);
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); doSave(); toast('GRAPHICS RESET', 'Reloading the world…', '', 60); });
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('beforeunload', () => { if (state !== 'start') doSave(); });
-window.__game = { car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
+window.__game = { get mt() { return [mtGap, mtTrail]; }, animals, get boats() { return boatsAct; }, herdsOf, boatsOf, orbitPos, canyonMask, massif, car, get landmarks() { return landmarks; }, get crates() { return crates; }, chunks, keys, props, felled, npcs, opts, setOpt, startRace, endRace, get race() { return race; }, NET, remote, ROOM, skyOf, get sky() { return skyAct; }, skyStats, gotCrystals, balloonPos, bombs, glamZones, fireHook, get hook() { return hook; }, canSee, inCover, roadDist, onRoad, baseHeight, tileAt, siteOf, foundSites, gotCrates, mapTiles, refreshActive, biomeAt, REG, get npcStats() { return { caught, wrecked, rammed, shaken }; }, get smashed() { return smashed; }, setState, get state() { return state; }, set tod(v) { tod = v; }, settle, SEED, recover, place(x, z, h) { car.x = x; car.z = z; car.h = h; car.vx = car.vz = 0; settle(); camYaw = h; refreshActive(true); planChunks(Math.floor(x / CH), Math.floor(z / CH)); pumpChunks(400); }, goto(id) { const l = landmarks.find(l => l.def.id === id); car.x = l.x + l.pad + 9; car.z = l.z + l.pad + 9; car.h = Math.atan2(l.x - car.x, l.z - car.z); car.vx = car.vz = 0; settle(); camYaw = car.h; planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); pumpChunks(400); }, groundAt, top, heightF, get cam() { return cam; }, step(n) { for (let i = 0; i < n; i++) tick(1 / 60, performance.now(), i === n - 1); } };
 })();
 </script>
 </body>
