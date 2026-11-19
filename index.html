@@ -135,6 +135,7 @@
   <div class="row" style="margin-top:4px">
     <label class="opt"><input type="checkbox" id="oThieves"> Parcel thieves to chase down</label>
     <label class="opt"><input type="checkbox" id="oHunters"> Hunter trucks that hunt you by sight</label>
+    <button id="bView" style="font-size:13px"></button>
   </div>
   <div class="row" style="margin-top:8px">
     <button id="bFriend">Play with a friend</button>
@@ -175,6 +176,9 @@ const $ = id => document.getElementById(id);
 
 // ───────────────────────── save / seed ─────────────────────────
 const ROOM = (new URLSearchParams(location.search).get('room') || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);     // multiplayer: both players open the same room link
+const VIEWS = [['Near', 13], ['Far', 20], ['Very far', 26]], VIEW_KEY = 'voxel-driver-view';      // how many chunks out the world is drawn
+let viewI = 1; try { const v = localStorage.getItem(VIEW_KEY); if (v !== null && VIEWS[+v]) viewI = +v; } catch (e) {}
+let RD = VIEWS[viewI][1];
 const SAVE_KEY = 'voxel-driver-v6' + (ROOM ? '-room-' + ROOM : '');      // a room keeps its own save, so it never overwrites a solo game
 const NOSAVE = new URLSearchParams(location.search).has('nosave');   // test drives: neither read nor write the save
 let save = null;
@@ -247,7 +251,7 @@ function lookAt(e, c, u) {
 
 // ───────────────────────── world ─────────────────────────
 // The world has no edge. It is cut into regions, and everything in a region (its site, roads, parcels) is generated from the seed when first needed.
-const SEA = 12, WATER = SEA - 0.22, CH = 16, RD = 13, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 18, RW = 7.5;      // RW: half the width of a road
+const SEA = 12, WATER = SEA - 0.22, CH = 16, REG = 512, RSH = 9, RMASK = 511, ROAD_R = 18, RW = 7.5;      // RW: half the width of a road
 const GRASS = 0, FOREST = 1, DESERT = 2, SNOW = 3, BEACH = 4, ROCK = 5, SEABED = 6, CITY = 7, GROW = 8, CANYON = 9, ALPS = 10, TRACK = 11;
 const BIOME_NAME = ['Grassland', 'Forest', 'Desert', 'Snowfield', 'Beach', 'Highlands', 'Shallows', 'City', 'Grow op', 'Canyon', 'Alpine meadow', 'Racetrack'];
 const TOPC = [[.38, .64, .27], [.25, .5, .22], [.87, .72, .45], [.95, .96, .98], [.9, .83, .6], [.55, .55, .57], [.62, .6, .48], [.47, .47, .5], [.5, .43, .32], [.76, .44, .28], [.33, .68, .27], [.36, .62, .26]];
@@ -2541,6 +2545,11 @@ function tumble(n, nx, nz, P = car) {   // send a caught thief or wrecked hunter
     vy: 8 + Math.random() * 3, ax: nz, az: -nx, a: 0, av: 7, t: 0, life: 4 });
   for (let i = 0; i < 14; i++) puff(n.x + (Math.random() - .5) * 2, n.y + 1 + Math.random() * 2, n.z + (Math.random() - .5) * 2, i % 3 ? (n.type === 'thief' ? [1, .85, .2] : [.9, .2, .15]) : [1, 1, 1], 0.35, 4, 0.6);
 }
+function glamTumble(n, nx, nz) {      // a wrecked hunter, sent spinning and sparkling
+  if (props.length >= 36) { const old = props.shift(); if (!old.shared) freeMesh(old.mesh); }
+  props.push({ mesh: npcMesh.hunter, shared: true, glam: true, x: n.x, y: n.y + 0.4, z: n.z, vx: nx * 9, vz: nz * 9, vy: 13 + Math.random() * 4, ax: nz, az: -nx, a: 0, av: 9, t: 0, life: 4 });
+  for (let i = 0; i < 30; i++) parts.push({ x: n.x, y: n.y + 1, z: n.z, vx: (Math.random() - .5) * 14, vy: 4 + Math.random() * 10, vz: (Math.random() - .5) * 14, life: 1 + Math.random() * 0.8, t: 0, size: 0.3, col: GLIT[i % GLIT.length], em: 0.9 });
+}
 function updateNpcs(dt) {
   if (guestMode()) return;           // the host runs them
   const two = NET.host && remote.alive;
@@ -3360,9 +3369,16 @@ function explodeGlitter(b, wet) {      // not a bang so much as a makeover
   for (const o of boatsAct) { const [bx, , bz] = vesselPose(o, Date.now() / 1000); if (hyp(bx - b.x, bz - b.z) < 15 && b.y < WATER + 8) o.glam = true; }
   for (const r of allRacers()) if (hyp(r.x - b.x, r.z - b.z) < 13) { r.glam = true; r.spinT = 1.4; }
   if (guestMode()) return;      // the host decides who was standing in it
-  for (const n of npcs) if (n.alive && !(n.glam > 0) && hyp(n.x - b.x, n.z - b.z) < 12 && Math.abs(n.y - b.y) < 9) {
+  for (const n of npcs) if (n.alive && !(n.glam > 0)) {
+    const dh = hyp(n.x - b.x, n.z - b.z), cop = n.type === 'hunter';
+    if (dh > (cop ? 20 : 12) || Math.abs(n.y - b.y) > (cop ? 14 : 9)) continue;      // the cops get a bigger target: one bomb anywhere near and they are done
     if (n.type === 'rival') { n.hookSlow = 3.5; n.v = 0; popText('THIEF YASSIFIED'); continue; }
-    n.glam = 7; tell(b.mine ? car : remote, n.type === 'thief' ? 'caught' : 'wrecked', { bomb: 1 });
+    if (cop) {      // blown clean off the road in a cloud of pink, and out of the hunt at once
+      const nx = (n.x - b.x) / (dh || 1), nz = (n.z - b.z) / (dh || 1);
+      glamTumble(n, nx, nz); netSend({ t: 'fx', id: n.id, nx, nz, g: 1 });
+      n.alive = false; n.wait = 10; tell(b.mine ? car : remote, 'wrecked', { bomb: 1 }); continue;
+    }
+    n.glam = 7; tell(b.mine ? car : remote, 'caught', { bomb: 1 });
   }
 }
 function updateBombs(dt) {
@@ -3566,7 +3582,7 @@ function netRecv(m) {
     if (st && st.def) { st.found = foundSites.has(st.id); pinned = target = st; toast('WAYPOINT', whereText(st), 'Your friend picked a new one for you both.', 3.5); }
   } else if (m.t === 'opt') { setOpt(m.k, !!m.v, true); toast(m.k === 'thieves' ? 'PARCEL THIEVES' : 'HUNTER TRUCKS', m.v ? 'On' : 'Off', 'Your friend flipped the switch.', 2.5); }
   else if (m.t === 'ev') npcEvent(m.e, m);      // a thief or hunter did something to this player
-  else if (m.t === 'fx') { const n = npcs.find(n => n.id === m.id); if (n) tumble(n, m.nx, m.nz, remote); }      // the friend caught or wrecked one: show it go
+  else if (m.t === 'fx') { const n = npcs.find(n => n.id === m.id); if (n) { if (m.g) glamTumble(n, m.nx, m.nz); else tumble(n, m.nx, m.nz, remote); } }      // the friend caught or wrecked one: show it go
   else if (m.t === 'hk') {      // the guest's hook landed on one of the host's thieves or hunters
     const n = npcs.find(n => n.id === m.id && n.alive);
     if (!n || !NET.host) return;
@@ -3658,7 +3674,15 @@ function setDraw(model, o) {
   const f = o.fog || FOG; gl.uniform2f(u.uFog, f[0], f[1]);
 }
 function draw(mesh, model, o) { if (!mesh) return; setDraw(model, o); gl.bindVertexArray(mesh.vao); gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_INT, 0); }
-const FOG = [RD * CH * 0.5, RD * CH - 12];
+let FOG = [RD * CH * 0.5, RD * CH - 12];
+function setView(i) {      // draw the world nearer or further out, and remember the choice
+  viewI = (i + VIEWS.length) % VIEWS.length; RD = VIEWS[viewI][1]; FOG = [RD * CH * 0.5, RD * CH - 12];
+  try { localStorage.setItem(VIEW_KEY, viewI); } catch (e) {}
+  planChunks(Math.floor(car.x / CH), Math.floor(car.z / CH)); lastCC = '';
+  $('bView').textContent = 'View distance: ' + VIEWS[viewI][0] + ' (' + RD * CH + ' m)';
+}
+$('bView').onclick = () => setView(viewI + 1);
+$('bView').textContent = 'View distance: ' + VIEWS[viewI][0] + ' (' + RD * CH + ' m)';
 let cam = { eye: [0, 0, 0], tgt: [0, 0, 0] };
 function updateCamera(dt) {
   if (state === 'start') camYaw += dt * 0.12; else camYaw += angDiff(car.h, camYaw) * Math.min(1, dt * (car.fly ? 2.8 : 3.6));
@@ -3729,7 +3753,7 @@ function render(time) {
     draw(cubeMesh, mulN(T(hook.x, hook.y, hook.z), RY(time * 9), Sc(.5, .5, .5)), { tint: [.3, .3, .36], emis: 0.3 });
   }
   // flattened scenery, still tumbling
-  for (const p of props) { const k = Math.min(1, (p.life - p.t) / 0.5); draw(p.mesh, mulN(T(p.x, p.y, p.z), RA(p.ax, 0, p.az, p.a), Sc(k, k, k))); }
+  for (const p of props) { const k = Math.min(1, (p.life - p.t) / 0.5); draw(p.mesh, mulN(T(p.x, p.y, p.z), RA(p.ax, 0, p.az, p.a), Sc(k, k, k)), p.glam ? { tint: [1.7, .8, 1.45], emis: 0.25 } : undefined); }
   if (remote.alive && Math.hypot(remote.x - cam.eye[0], remote.z - cam.eye[2]) < maxD + 40) {      // your friend's truck, in blue
     const fb = mulN(T(remote.x, remote.y, remote.z), RY(remote.h), remote.flip ? mulN(T(0, 1.3, 0), RX(remote.flip), T(0, -1.3, 0)) : ID), fm = mulN(fb, T(0, remote.sy, 0), RX(-remote.pitch), RZ(remote.roll));
     draw(friendMesh.body, fm); draw(friendMesh.glow, fm, { emis: 1 });
